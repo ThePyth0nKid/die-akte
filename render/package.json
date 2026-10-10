@@ -1,0 +1,14 @@
+{
+  "name": "die-akte-render",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "Rendert Kamerafahrten der Akte Bild für Bild zu Video (Playwright + ffmpeg)",
+  "scripts": {
+    "dienst": "node render_dienst.cjs",
+    "check": "node --check render_fahrt.cjs && node --check render_dienst.cjs"
+  },
+  "dependencies": {
+    "playwright": "1.58.0"
+  }
+}

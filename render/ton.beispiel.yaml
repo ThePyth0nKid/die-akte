@@ -1,0 +1,9 @@
+# Stimmen für render/vertonen.py (ElevenLabs). Kopieren nach ton.yaml und eigene Stimm-IDs eintragen.
+# Der Schlüssel kommt NIE hierher, sondern in die Umgebungsvariable ELEVENLABS_API_KEY.
+stimmen:
+  erzaehler:
+    voice_id: "<deine-stimm-id>"
+    einstellungen: {stability: 0.45, similarity_boost: 0.8, style: 0.2, speed: 1.0}
+  schnell:
+    voice_id: "<andere-stimm-id>"
+    einstellungen: {stability: 0.5, similarity_boost: 0.8, style: 0.25, speed: 1.2}
