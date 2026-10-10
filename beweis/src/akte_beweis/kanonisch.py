@@ -54,7 +54,10 @@ def cbor(wert: Any, _tiefe: int = 0) -> bytes:
     if isinstance(wert, float):
         raise KodierFehler(f"Gleitkommazahl abgelehnt (kanonisches CBOR): {wert!r}")
     if isinstance(wert, str):
-        roh = wert.encode("utf-8")
+        try:
+            roh = wert.encode("utf-8")
+        except UnicodeEncodeError:
+            raise KodierFehler("Zeichenkette ist kein gültiges UTF-8 (einzelnes Surrogat)") from None
         return _kopf(3, len(roh)) + roh
     if isinstance(wert, (list, tuple)):
         if len(wert) > MAX_EINTRAEGE:
@@ -73,8 +76,26 @@ def cbor(wert: Any, _tiefe: int = 0) -> bytes:
     raise KodierFehler(f"Typ nicht kodierbar: {type(wert).__name__}")
 
 
-def kanonisches_json(wert: Any) -> bytes:
-    """Wie ``canonical_json_bytes`` in Atlas: Schlüssel sortiert (bytewise), ohne Leerzeichen, UTF-8 roh."""
+def _ohne_gleitkomma(wert: Any, tiefe: int = 0) -> None:
+    if tiefe > MAX_TIEFE:
+        raise KodierFehler("zu tief verschachtelt")
     if isinstance(wert, float):
         raise KodierFehler("Gleitkommazahl abgelehnt")
-    return json.dumps(wert, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    if isinstance(wert, dict):
+        for k, v in wert.items():
+            if not isinstance(k, str):
+                raise KodierFehler("Schlüssel müssen Zeichenketten sein")
+            _ohne_gleitkomma(v, tiefe + 1)
+    elif isinstance(wert, (list, tuple)):
+        for v in wert:
+            _ohne_gleitkomma(v, tiefe + 1)
+
+
+def kanonisches_json(wert: Any) -> bytes:
+    """Wie ``canonical_json_bytes`` in Atlas: Schlüssel sortiert (bytewise), ohne Leerzeichen, UTF-8 roh.
+    Gleitkommazahlen werden auf jeder Ebene abgelehnt (wie beim CBOR-Pfad)."""
+    _ohne_gleitkomma(wert)
+    try:
+        return json.dumps(wert, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError, UnicodeEncodeError) as fehler:
+        raise KodierFehler(f"nicht als JSON kodierbar: {fehler}") from None

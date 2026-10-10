@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hmac
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -136,58 +137,96 @@ class Ergebnis:
         return {"gueltig": self.gueltig, "nachweise": self.nachweise, "fehler": self.fehler}
 
 
-def _rfc3339(ts: str) -> bool:
+_RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d{1,9})?([Zz]|[+-]\d{2}:\d{2})$")
+
+
+def _rfc3339(ts) -> bool:
+    """Streng wie ``chrono::DateTime::parse_from_rfc3339``: kein ISO-Wochenformat, keine Kurzformen."""
+    if not isinstance(ts, str) or not _RFC3339.match(ts):
+        return False
     try:
-        datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        return "T" in ts and (ts.endswith("Z") or "+" in ts[10:] or "-" in ts[10:])
+        datetime.fromisoformat(ts[:19])
+        return True
     except ValueError:
         return False
 
 
+def _gleich(a, b) -> bool:
+    """Konstantzeitiger Vergleich, der bei fremden Typen und Nicht-ASCII nicht abstürzt."""
+    if not isinstance(a, str) or not isinstance(b, str):
+        return False
+    return hmac.compare_digest(a.encode("utf-8", "surrogatepass"), b.encode("utf-8", "surrogatepass"))
+
+
 def trace_pruefen(t: dict, b: dict, *, strikte_kette: bool = False) -> Ergebnis:
-    """Prüft einen Trace gegen sein Schlüsselbündel (Schritte wie ``verify_trace_with`` in Atlas, ohne Anker)."""
+    """Prüft einen Trace gegen sein Schlüsselbündel (Schritte wie ``verify_trace_with`` in Atlas, ohne Anker).
+
+    Jede fehlerhafte oder bösartige Eingabe ergibt ``gueltig=False`` mit Begründung, nie eine Ausnahme.
+    """
     erg = Ergebnis()
-    erg.pruefung("schema-version", t.get("schema_version") == SCHEMA_TRACE, str(t.get("schema_version")))
+    if not isinstance(t, dict) or not isinstance(b, dict):
+        erg.fehler.append("Trace und Bündel müssen JSON-Objekte sein.")
+        erg.pruefung("format", False)
+        return erg
+    erg.pruefung("schema-version", t.get("schema_version") == SCHEMA_TRACE, str(t.get("schema_version"))[:80])
     try:
-        ok = hmac.compare_digest(buendel_hash(b), str(t.get("pubkey_bundle_hash", "")))
-    except (KeyError, KodierFehler) as fehler:
+        ok = _gleich(buendel_hash(b), t.get("pubkey_bundle_hash"))
+    except (KeyError, TypeError, ValueError) as fehler:
         ok = False
         erg.fehler.append(f"Bündel unlesbar: {fehler}")
     erg.pruefung("pubkey-bundle-hash", ok)
+    schluessel = b.get("keys") if isinstance(b.get("keys"), dict) else {}
 
-    ereignisse = t.get("events", [])
+    ereignisse = t.get("events")
+    if not isinstance(ereignisse, list) or not all(isinstance(e, dict) for e in ereignisse):
+        erg.fehler.append("events muss eine Liste von Objekten sein.")
+        erg.pruefung("format", False)
+        return erg
     workspace = t.get("workspace_id", "")
     gesehen: set[str] = set()
     hash_ok, sig_ok = True, True
     for e in ereignisse:
-        eid = e.get("event_id", "?")
-        if e["event_hash"] in gesehen:
+        eid = str(e.get("event_id", "?"))[:80]
+        event_hash = e.get("event_hash")
+        if not isinstance(event_hash, str):
+            erg.fehler.append(f"Ereignis {eid}: event_hash fehlt")
+            hash_ok = sig_ok = False
+            continue
+        if event_hash in gesehen:
             erg.fehler.append(f"Ereignis {eid}: doppelter event_hash")
             hash_ok = False
-        gesehen.add(e["event_hash"])
-        sig = e.get("signature", {})
+        gesehen.add(event_hash)
+        sig = e.get("signature") if isinstance(e.get("signature"), dict) else {}
+        eltern = e.get("parent_hashes", [])
         try:
-            eingabe = signing_input(workspace, eid, e["ts"], sig["kid"], e.get("parent_hashes", []), e["payload"],
+            if not isinstance(eltern, list) or not all(isinstance(x, str) for x in eltern):
+                raise KodierFehler("parent_hashes ist keine Liste von Zeichenketten")
+            for feld in (workspace, e.get("event_id"), e.get("ts"), sig.get("kid")):
+                if not isinstance(feld, str):
+                    raise KodierFehler("workspace, event_id, ts und kid müssen Zeichenketten sein")
+            if "payload" not in e:
+                raise KodierFehler("payload fehlt")
+            eingabe = signing_input(workspace, e["event_id"], e["ts"], sig["kid"], eltern, e["payload"],
                                     e.get("author_did"))
-        except (KeyError, KodierFehler) as fehler:
+        except (KeyError, TypeError, ValueError) as fehler:
             erg.fehler.append(f"Ereignis {eid}: Signing-Input nicht baubar: {fehler}")
             hash_ok = sig_ok = False
             continue
-        if not hmac.compare_digest(hash_hex(eingabe), e["event_hash"]):
+        if not _gleich(hash_hex(eingabe), event_hash):
             erg.fehler.append(f"Ereignis {eid}: event_hash passt nicht zum Inhalt")
             hash_ok = False
-        if sig.get("alg") != "EdDSA" or not _rfc3339(e["ts"]):
+        if sig.get("alg") != "EdDSA" or not _rfc3339(e.get("ts")):
             erg.fehler.append(f"Ereignis {eid}: alg oder ts ungültig")
             sig_ok = False
             continue
         try:
-            pub = b64url_lesen(b["keys"][sig["kid"]])
-            roh = b64url_lesen(sig["sig"])
+            pub = b64url_lesen(schluessel[sig["kid"]])
+            roh = b64url_lesen(sig.get("sig", ""))
         except KeyError:
-            erg.fehler.append(f"Ereignis {eid}: Schlüssel {sig['kid']!r} nicht im Bündel")
+            erg.fehler.append(f"Ereignis {eid}: Schlüssel {str(sig.get('kid'))[:80]!r} nicht im Bündel")
             sig_ok = False
             continue
-        except ValueError as fehler:
+        except (TypeError, ValueError) as fehler:
             erg.fehler.append(f"Ereignis {eid}: {fehler}")
             sig_ok = False
             continue
@@ -197,15 +236,20 @@ def trace_pruefen(t: dict, b: dict, *, strikte_kette: bool = False) -> Ergebnis:
     erg.pruefung("event-hashes", hash_ok, f"{len(ereignisse)} Ereignisse")
     erg.pruefung("event-signatures", sig_ok, f"{len(ereignisse)} Signaturen")
 
-    eltern_ok = all(p in gesehen for e in ereignisse for p in e.get("parent_hashes", []))
+    eltern_ok = all(isinstance(e.get("parent_hashes", []), list)
+                    and all(isinstance(x, str) and x in gesehen for x in e.get("parent_hashes", []))
+                    for e in ereignisse)
     if not eltern_ok:
         erg.fehler.append("Ein Ereignis verweist auf ein Eltern-Ereignis, das im Trace fehlt.")
     erg.pruefung("parent-links", eltern_ok)
 
     if strikte_kette:
-        erg.pruefung("strict-chain", _strikte_kette(ereignisse, erg))
+        erg.pruefung("strict-chain", eltern_ok and hash_ok and _strikte_kette(ereignisse, erg))
 
-    erg.pruefung("dag-tips", sorted(t.get("dag_tips", [])) == spitzen(ereignisse))
+    tips = t.get("dag_tips")
+    gueltige = [e for e in ereignisse if isinstance(e.get("event_hash"), str)]
+    erg.pruefung("dag-tips", isinstance(tips, list) and all(isinstance(x, str) for x in tips) and hash_ok
+                 and sorted(tips) == spitzen(gueltige))
     return erg
 
 

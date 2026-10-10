@@ -157,7 +157,7 @@ def test_richtlinie_widerruf():
                        eltern=[w["event_hash"]], payload={"type": "akte.freigabe", "inhalt_zusage": ""})
     t = {"events": [w, danach]}
     erg = pruefen(t)
-    assert not erg.gueltig and any("widerrufenem" in f for f in erg.fehler)
+    assert not erg.gueltig and any("widerrufen" in f for f in erg.fehler)
 
 
 def test_offenlegung_gegen_zusage():
