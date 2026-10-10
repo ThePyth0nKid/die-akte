@@ -449,6 +449,10 @@ def _mappen_stand(board: Board, direkt: dict[int, int], erlaubt: set[int] | None
     karten_qs = BoardKarte.objects.filter(board_id__in=unter)
     if streng:
         karten_qs = karten_qs.filter(entitaet__status=Status.FREIGEGEBEN)
+        veraendert = {e.pk for e in Entitaet.objects.filter(
+            pk__in=karten_qs.values("entitaet_id")).prefetch_related(freigaben_prefetch())
+            if veraendert_seit_freigabe(e, "karte")}
+        karten_qs = karten_qs.exclude(entitaet_id__in=veraendert)
     for b, e, x, y in karten_qs.values_list("board_id", "entitaet_id", "x", "y"):
         karten_je_board[b].add(e)
         lagen[b].append((x, y))

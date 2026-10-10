@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { laeuftNoch } from "@/lib/jwt"
 
 // Ohne Anmeldung erreichbar: Startseite, Login, die API-Routen der Oberfläche, die Board-Übersicht und die Wand eines
 // Boards. Welche Boards wirklich ohne Konto lesbar sind, entscheidet das Backend (Board.oeffentlich +
@@ -9,9 +10,13 @@ const OFFEN = ["/", "/login", "/api"]
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const angemeldet = Boolean(request.cookies.get("access_token")?.value)
+  const access = request.cookies.get("access_token")?.value
+  // Für geschützte Seiten genügt eine Sitzung, die sich erneuern lässt; die Seite erneuert selbst.
+  const angemeldet = Boolean(access || request.cookies.get("refresh_token")?.value)
 
-  if (pathname === "/login" && angemeldet) {
+  // Vom Login weg nur mit einem Access-Token, das noch läuft. Sonst hinge, wer anderswo abgemeldet wurde, zwischen
+  // /login und /akte fest, bis das Cookie abläuft.
+  if (pathname === "/login" && laeuftNoch(access)) {
     return NextResponse.redirect(new URL("/akte", request.url))
   }
   const offen = OFFEN.some((p) => (p === "/" ? pathname === "/" : pathname === p || pathname.startsWith(p + "/")))

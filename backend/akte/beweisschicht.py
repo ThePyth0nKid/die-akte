@@ -53,7 +53,7 @@ from cryptography.hazmat.primitives.serialization import (
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Max, Prefetch, Subquery
 from django.utils import timezone as dj_timezone
 
 from . import lesecache
@@ -273,9 +273,12 @@ def inhalt_faden(v, bevorzugt: set[str] | frozenset = frozenset()) -> dict:
 
 
 def freigaben_prefetch(pfad: str = "ereignisse") -> Prefetch:
-    """Für Listen: die Freigaben je Objekt in einer Abfrage statt einer je Objekt (``letzte_freigabe``)."""
-    return Prefetch(pfad, queryset=Ereignis.objects.filter(typ="akte.freigabe").order_by("-position"),
-                    to_attr=FREIGABEN_VORAB)
+    """Für Listen: je Objekt nur die jüngste Freigabe, in einer Abfrage statt einer je Objekt (``letzte_freigabe``).
+    Ohne das signierte JSON, das hier niemand braucht."""
+    neueste = (Ereignis.objects.filter(typ="akte.freigabe").values("entitaet_id", "verbindung_id")
+               .annotate(m=Max("position")).values("m"))
+    return Prefetch(pfad, queryset=Ereignis.objects.filter(typ="akte.freigabe", position__in=Subquery(neueste))
+                    .defer("json").order_by("-position"), to_attr=FREIGABEN_VORAB)
 
 
 def letzte_freigabe(objekt) -> Ereignis | None:
@@ -294,6 +297,26 @@ def _originale(signiert: dict) -> set[str]:
     return {b.get("original_sha256") for b in signiert.get("belege") or [] if isinstance(b, dict)} - {"", None}
 
 
+def _nachgereicht(jetzt: dict, signiert: dict) -> dict:
+    """Was die Beweissicherung nach der Unterschrift nachreicht, ist keine Änderung: Eine Archivkopie oder eine
+    gesicherte Kopie, die beim Unterschreiben noch fehlte (leer), darf später dazukommen. Eine schon unterschriebene
+    Angabe darf sich nicht ändern."""
+    alt, neu = signiert.get("belege") or [], jetzt.get("belege") or []
+    if len(alt) != len(neu):
+        return jetzt
+    belege = []
+    for a, n in zip(alt, neu):
+        if not isinstance(a, dict) or not isinstance(n, dict):
+            return jetzt
+        n = {**n, "quelle": dict(n.get("quelle") or {})}
+        if not (a.get("quelle") or {}).get("archiv_url"):
+            n["quelle"]["archiv_url"] = (a.get("quelle") or {}).get("archiv_url", "")
+        if not a.get("original_sha256"):
+            n["original_sha256"] = a.get("original_sha256", "")
+        belege.append(n)
+    return {**jetzt, "belege": belege}
+
+
 def veraendert_seit_freigabe(objekt, art: str) -> bool:
     """Freigegeben, aber der Inhalt stimmt nicht mehr mit dem unterschriebenen überein (oder ist geschwärzt)?"""
     if not aktiv() or objekt.status != Status.FREIGEGEBEN:
@@ -304,7 +327,10 @@ def veraendert_seit_freigabe(objekt, art: str) -> bool:
     signiert = unterschriebener_inhalt(e)
     if signiert is None:
         return True
-    jetzt = inhalt_karte(objekt) if art == "karte" else inhalt_faden(objekt, _originale(signiert))
+    if art == "karte":
+        jetzt = inhalt_karte(objekt)
+    else:
+        jetzt = _nachgereicht(inhalt_faden(objekt, _originale(signiert)), signiert)
     return kanonisches_json(jetzt) != kanonisches_json(signiert)
 
 

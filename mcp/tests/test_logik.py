@@ -98,7 +98,12 @@ def test_unvollstaendiges_paket_ist_ein_valueerror():
 
     for paket in ({"quellen": [{"titel": "ohne Schlüssel"}]}, {"entitaeten": [{"schluessel": "a", "name": "A"}]},
                   {"verbindungen": [{"von": "a", "nach": "b", "typ": "x", "belege": [{}]}]}, {"board": {"titel": "T"}},
-                  []):
+                  [], {"entitaeten": [{"schluessel": "a", "name": "A", "typ": "firma"}],
+                       "verbindungen": [{"von": "a", "nach": "tippfehler", "typ": "x"}]},
+                  {"quellen": [{"schluessel": "q", "titel": "Q"}],
+                   "entitaeten": [{"schluessel": "a", "name": "A", "typ": "firma"},
+                                  {"schluessel": "b", "name": "B", "typ": "firma"}],
+                   "verbindungen": [{"von": "a", "nach": "b", "typ": "x", "belege": [{"quelle": "q2"}]}]}):
         with pytest.raises(ValueError):
             aktionen._paket_pruefen(paket)
 

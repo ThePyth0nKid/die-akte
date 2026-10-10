@@ -18,9 +18,13 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Die Besucher-IP, die der vorgeschaltete Proxy (Caddy) gesetzt hat, an das Backend weitergeben: Dort bremst sie
+  // Fehlversuche je Konto und Absender (wirksam nur mit AKTE_VERTRAUTE_PROXYS).
+  const absender = request.headers.get("x-forwarded-for")
   const res = await djangoFetch("/api/v1/auth/login/", {
     method: "POST",
     body: JSON.stringify({ login, password }),
+    headers: absender ? { "X-Forwarded-For": absender } : {},
   })
 
   if (!res.ok) {

@@ -9,38 +9,55 @@ from __future__ import annotations
 import hashlib
 
 from django.contrib.auth import authenticate, get_user_model
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.settings import api_settings
 from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
-class KontoDrossel(SimpleRateThrottle):
-    """Fehlversuche je Konto, nicht je Absender: Hinter dem Web-Proxy kommen alle Anmeldungen vom selben Absender.
-    Eine Drossel nur je Absender sperrte alle aus, sobald einer rät; diese sperrt nur das geratene Konto."""
+class Fehlversuche:
+    """Fehlgeschlagene Anmeldungen je Konto UND Absender (Rate ``login_konto``).
 
-    scope = "login_konto"
+    Nur je Absender sperrte hinter dem Web-Proxy alle zugleich aus; nur je Konto könnte jeder ein fremdes Konto
+    aussperren. Gezählt werden nur Fehlversuche, nach dem Auflösen der E-Mail auf den Benutzernamen (sonst zählten
+    Name und Adresse doppelt). Den Absender liefert DRF (``NUM_PROXIES`` = ``AKTE_VERTRAUTE_PROXYS``).
+    """
 
-    def get_cache_key(self, request, view):
-        login = str(request.data.get("login") or "").strip().casefold()
-        if not login:
-            return None
-        return self.cache_format % {"scope": self.scope,
-                                    "ident": hashlib.sha256(login.encode("utf-8")).hexdigest()[:32]}
+    def __init__(self, request, view, benutzername: str):
+        anzahl, dauer = SimpleRateThrottle.parse_rate(None, api_settings.DEFAULT_THROTTLE_RATES.get("login_konto"))
+        self.grenze, self.dauer = anzahl, dauer
+        ident = ScopedRateThrottle().get_ident(request)
+        roh = f"{benutzername.casefold()}|{ident}".encode("utf-8")
+        self.schluessel = "akte-login-fehl:" + hashlib.sha256(roh).hexdigest()[:32]
+
+    def gesperrt(self) -> bool:
+        return self.grenze is not None and int(cache.get(self.schluessel) or 0) >= self.grenze
+
+    def zaehlen(self) -> None:
+        if self.grenze is None:
+            return
+        if not cache.add(self.schluessel, 1, self.dauer):
+            try:
+                cache.incr(self.schluessel)
+            except ValueError:  # gerade abgelaufen
+                cache.add(self.schluessel, 1, self.dauer)
 
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes: list = []
-    throttle_classes = [ScopedRateThrottle, KontoDrossel]
+    throttle_classes = [ScopedRateThrottle]
     throttle_scope = "login"
 
     def post(self, request):
-        login = str(request.data.get("login") or "").strip()
-        passwort = str(request.data.get("password") or "")
+        daten = request.data if isinstance(request.data, dict) else {}
+        login = str(daten.get("login") or "").strip()
+        passwort = str(daten.get("password") or "")
         if not login or not passwort:
             return Response({"detail": "Login und Passwort sind nötig."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -49,8 +66,13 @@ class LoginView(APIView):
             konto = get_user_model().objects.filter(email__iexact=login).only("username").first()
             if konto:
                 benutzername = konto.get_username()
+        fehl = Fehlversuche(request, self, benutzername)
+        if fehl.gesperrt():
+            return Response({"detail": "Zu viele Fehlversuche. Bitte in einer Minute erneut."},
+                            status=status.HTTP_429_TOO_MANY_REQUESTS)
         nutzer = authenticate(request, username=benutzername, password=passwort)
         if nutzer is None or not nutzer.is_active:
+            fehl.zaehlen()
             return Response({"detail": "Anmeldung fehlgeschlagen."}, status=status.HTTP_401_UNAUTHORIZED)
 
         refresh = RefreshToken.for_user(nutzer)

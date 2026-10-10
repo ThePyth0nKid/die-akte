@@ -120,3 +120,28 @@ def test_historie_liest_jeden_blob_einmal_und_verweigert_flache_klone(tmp_path, 
     with pytest.raises(SystemExit) as fehler:
         scrub.historie_pruefen(_oeffentlich())
     assert "Flacher Klon" in str(fehler.value)
+
+
+def test_privater_pfad_bleibt_in_jedem_commit_verdeckt(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    for k, v in (("user.name", "Test"), ("user.email", "test@example.org"), ("commit.gpgsign", "false")):
+        _git(repo, "config", k, v)
+    datei = repo / "geheimwort.txt"
+    for n in range(2):
+        datei.write_text(f"token{n} = {SCHLUESSEL}{n}\n", encoding="utf-8")
+        _git(repo, "add", "geheimwort.txt")
+        _git(repo, "commit", "-q", "-m", f"c{n}")
+    monkeypatch.chdir(repo)
+    regeln = _oeffentlich() + scrub._regeln_lesen("geheimwort", True, "privat")
+    funde = scrub.historie_pruefen(regeln)
+    assert len({f.ort for f in funde if f.zeile}) == 2  # zwei verschiedene Blobs, zwei Commits
+    scrub.ausgeben(funde, zeigen=False)
+    assert "geheimwort" not in capsys.readouterr().out
+
+
+def test_windows_1252_trifft_umlaut_regel(tmp_path):
+    datei = tmp_path / "alt.txt"
+    datei.write_bytes("Frau Müller".encode("cp1252"))
+    assert len(scrub.dateien_pruefen([datei], tmp_path, scrub._regeln_lesen("Müller", True, "privat"))) == 1

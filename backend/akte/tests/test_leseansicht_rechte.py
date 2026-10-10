@@ -310,3 +310,92 @@ class SpeicherUndArchivTest(TestCase):
             netz.get.assert_not_called()
         self.assertEqual(s.status, "fehler")
 
+
+
+class NachgereichtUndZwischenzeitTest(_Grundlage):
+    """Code-Review Runde 2: Was die Beweissicherung nachreicht, ist keine Änderung; was zwischen Vorbereiten und
+    Unterschreiben passiert, fällt auf."""
+
+    def _alles_freigeben(self, archiv=""):
+        a, b, q, v = self.werkzeug_legt_an()
+        Quelle.objects.filter(pk=q.pk).update(archiv_url=archiv)
+        for art, pk in (("karte", a["id"]), ("karte", b["id"]), ("faden", v["id"])):
+            self.assertEqual(self.freigeben(art, pk).status_code, 201)
+        return q, Verbindung.objects.get(pk=v["id"])
+
+    def _veraendert(self, v):
+        from akte.pruefung import faeden_qs
+
+        return beweisschicht.veraendert_seit_freigabe(faeden_qs().get(pk=v.pk), "faden")
+
+    def test_archivkopie_und_erste_sicherung_duerfen_nachkommen(self):
+        q, v = self._alles_freigeben()
+        Quelle.objects.filter(pk=q.pk).update(archiv_url="https://web.archive.org/web/2/x")
+        Sicherung.objects.create(quelle=q, art="original", status="fertig", sha256="cd" * 32, bytes=5)
+        self.assertFalse(self._veraendert(v))
+
+    def test_unterschriebene_archivadresse_bleibt(self):
+        q, v = self._alles_freigeben(archiv="https://web.archive.org/web/1/x")
+        Quelle.objects.filter(pk=q.pk).update(archiv_url="https://web.archive.org/web/3/anders")
+        self.assertTrue(self._veraendert(v))
+
+    def test_unterschriebene_kopie_bleibt_massgeblich(self):
+        a, b, q, v = self.werkzeug_legt_an()
+        Sicherung.objects.create(quelle=q, art="original", status="fertig", sha256="ab" * 32, bytes=5)
+        for art, pk in (("karte", a["id"]), ("karte", b["id"]), ("faden", v["id"])):
+            self.freigeben(art, pk)
+        faden = Verbindung.objects.get(pk=v["id"])
+        Sicherung.objects.create(quelle=q, art="original", status="fertig", sha256="ef" * 32, bytes=6)
+        self.assertFalse(self._veraendert(faden))
+        Sicherung.objects.filter(sha256="ab" * 32).delete()
+        self.assertTrue(self._veraendert(faden))
+
+    def _vorbereiten(self, art, pk, kid=None):
+        vor = self.mensch.post(f"{B}/freigabe/vorbereiten/", {"objekt": art, "id": pk, "kid": kid or self.kid},
+                               format="json")
+        self.assertEqual(vor.status_code, 200, vor.content)
+        return vor.json()
+
+    def _abschliessen(self, vor):
+        sig = self.privat.sign(b64url_lesen(vor["signing_input"]))
+        return self.mensch.post(f"{B}/freigabe/abschliessen/", {"event_id": vor["event_id"], "signatur": b64url(sig)},
+                                format="json")
+
+    def test_inhalt_aendert_sich_zwischen_vorbereiten_und_unterschreiben(self):
+        a, b, q, v = self.werkzeug_legt_an()
+        vor = self._vorbereiten("faden", v["id"])
+        Verbindung.objects.filter(pk=v["id"]).update(beschreibung="untergeschoben")
+        self.assertEqual(self._abschliessen(vor).status_code, 409)
+        self.assertEqual(Verbindung.objects.get(pk=v["id"]).status, Status.ENTWURF)
+        self.assertFalse(Ereignis.objects.filter(typ="akte.freigabe").exists())
+
+    def test_pruefung_aendert_sich_zwischen_vorbereiten_und_unterschreiben(self):
+        a, b, q, v = self.werkzeug_legt_an()
+        Quelle.objects.filter(pk=q.pk).update(archiv_url="")
+        vor = self.mensch.post(f"{B}/freigabe/vorbereiten/", {"objekt": "faden", "id": v["id"], "kid": self.kid,
+                                                               "board": "arbeit"}, format="json").json()
+        self.arbeit.regeln = {"quelle_ohne_archiv": "sperrt"}
+        self.arbeit.save()
+        self.assertIn(self._abschliessen(vor).status_code, (400, 409))
+        self.assertEqual(Verbindung.objects.get(pk=v["id"]).status, Status.ENTWURF)
+
+    def test_widerruf_zwischen_vorbereiten_und_unterschreiben(self):
+        a, *_ = self.werkzeug_legt_an()
+        vor = self._vorbereiten("karte", a["id"])
+        from django.utils import timezone
+
+        Schluessel.objects.filter(kid=self.kid).update(widerrufen_am=timezone.now())
+        self.assertEqual(self._abschliessen(vor).status_code, 403)
+        self.assertFalse(Ereignis.objects.filter(typ="akte.freigabe").exists())
+
+    def test_speicher_ersetzt_beschaedigte_kopie(self):
+        import hashlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as ordner, override_settings(AKTE_SPEICHER_LOKAL=ordner, AKTE_R2_BUCKET=""):
+            daten = b"%PDF-1.4 echt"
+            schl = speicher.schluessel(hashlib.sha256(daten).hexdigest(), "pdf")
+            speicher.ablegen(schl, daten, "application/pdf")
+            (Path(ordner) / schl).write_bytes(b"halb")
+            speicher.ablegen(schl, daten, "application/pdf")
+            self.assertEqual(speicher.lesen(schl), daten)

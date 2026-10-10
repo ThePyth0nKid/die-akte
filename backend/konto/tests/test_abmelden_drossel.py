@@ -1,15 +1,14 @@
-"""Abmelden sperrt den Refresh-Token; Fehlversuche werden je Konto gebremst, nicht je Absender."""
+"""Abmelden sperrt den Refresh-Token; Fehlversuche werden je Konto und Absender gebremst, Erfolge nicht gezählt."""
 
-from unittest import mock
-
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from konto.views import KontoDrossel
-
 LOGIN = "/api/v1/auth/login/"
+DREI_JE_MINUTE = {**settings.REST_FRAMEWORK, "DEFAULT_THROTTLE_RATES": {
+    **settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"], "login_konto": "3/min"}}
 
 
 class AbmeldenTest(TestCase):
@@ -37,20 +36,38 @@ class AbmeldenTest(TestCase):
         self.assertEqual(self.client.post("/api/v1/auth/logout/", {"refresh": "x"}, format="json").status_code, 204)
 
 
-class KontoDrosselTest(TestCase):
+@override_settings(REST_FRAMEWORK=DREI_JE_MINUTE)
+class FehlversucheTest(TestCase):
     def setUp(self):
         cache.clear()
         get_user_model().objects.create_user("redaktion", "redaktion@example.org", "lang-genug-123")
         get_user_model().objects.create_user("andere", "andere@example.org", "lang-genug-456")
         self.client = APIClient()
 
+    def _login(self, login, passwort, **kopf):
+        return self.client.post(LOGIN, {"login": login, "password": passwort}, format="json", **kopf).status_code
+
     def test_ratendes_konto_wird_gesperrt_andere_nicht(self):
-        with mock.patch.object(KontoDrossel, "rate", "3/min", create=True):
-            for _ in range(3):
-                self.assertEqual(self.client.post(LOGIN, {"login": "redaktion", "password": "falsch"},
-                                                  format="json").status_code, 401)
-            self.assertEqual(self.client.post(LOGIN, {"login": "REDAKTION", "password": "falsch"},
-                                              format="json").status_code, 429)
-            # Gleicher Absender, anderes Konto: nicht betroffen.
-            self.assertEqual(self.client.post(LOGIN, {"login": "andere", "password": "lang-genug-456"},
-                                              format="json").status_code, 200)
+        self.assertEqual([self._login("redaktion", "falsch") for _ in range(2)], [401, 401])
+        # Name und E-Mail zählen gemeinsam: dasselbe Konto.
+        self.assertEqual(self._login("REDAKTION@example.org", "falsch"), 401)
+        self.assertEqual(self._login("redaktion", "lang-genug-123"), 429)
+        self.assertEqual(self._login("andere", "lang-genug-456"), 200)
+
+    def test_erfolge_zaehlen_nicht(self):
+        self.assertEqual({self._login("redaktion", "lang-genug-123") for _ in range(6)}, {200})
+
+    @override_settings(REST_FRAMEWORK={**DREI_JE_MINUTE, "NUM_PROXIES": 1})
+    def test_anderer_absender_bleibt_frei(self):
+        for _ in range(3):
+            self._login("redaktion", "falsch", HTTP_X_FORWARDED_FOR="203.0.113.7")  # scrub:erlaubt (Doku-IP)
+        self.assertEqual(self._login("redaktion", "lang-genug-123", HTTP_X_FORWARDED_FOR="203.0.113.7"), 429)  # scrub:erlaubt
+        self.assertEqual(self._login("redaktion", "lang-genug-123", HTTP_X_FORWARDED_FOR="198.51.100.2"), 200)  # scrub:erlaubt
+
+    def test_ohne_vertraute_proxys_zaehlt_kein_x_forwarded_for(self):
+        for i in range(3):
+            self._login("redaktion", "falsch", HTTP_X_FORWARDED_FOR=f"192.0.2.{i}")  # scrub:erlaubt (Doku-IPs)
+        self.assertEqual(self._login("redaktion", "lang-genug-123", HTTP_X_FORWARDED_FOR="192.0.2.9"), 429)  # scrub:erlaubt
+
+    def test_json_liste_ist_kein_serverfehler(self):
+        self.assertEqual(self.client.post(LOGIN, ["x"], format="json").status_code, 400)

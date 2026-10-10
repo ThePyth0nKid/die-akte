@@ -230,6 +230,14 @@ def _paket_pruefen(daten: dict) -> None:
     if "board" in daten and not (isinstance(daten["board"], dict) and daten["board"].get("slug")
                                  and daten["board"].get("titel")):
         fehler.append("board braucht slug und titel")
+    if not fehler:
+        # Querverweise vor dem ersten Schreiben: sonst stünden Quellen und Karten schon da, wenn ein Faden scheitert.
+        q = {x["schluessel"] for x in daten.get("quellen", [])}
+        e = {x["schluessel"] for x in daten.get("entitaeten", [])}
+        for i, v in enumerate(daten.get("verbindungen", []), 1):
+            fehler += [f"verbindungen[{i}].{t}: {v[t]!r} fehlt unter entitaeten" for t in ("von", "nach") if v[t] not in e]
+            fehler += [f"verbindungen[{i}].belege[{j}]: Quelle {b['quelle']!r} fehlt unter quellen"
+                       for j, b in enumerate(v.get("belege") or [], 1) if b["quelle"] not in q]
     if fehler:
         raise ValueError("Paket unvollständig: " + "; ".join(fehler[:20]))
 
@@ -406,7 +414,12 @@ def _ersetzen(ziel: Path, dateien: dict[str, bytes], pruefsummen: bytes) -> None
         (neu / "pruefsummen.sha256").write_bytes(pruefsummen)
         if ziel.exists():
             ziel.rename(alt)
-        neu.rename(ziel)
+        try:
+            neu.rename(ziel)
+        except OSError:
+            if alt.exists() and not ziel.exists():
+                alt.rename(ziel)  # alten Stand zurück, bevor aufgeräumt wird
+            raise
     finally:
         shutil.rmtree(neu, ignore_errors=True)
         shutil.rmtree(alt, ignore_errors=True)

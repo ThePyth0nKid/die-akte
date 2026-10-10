@@ -148,8 +148,9 @@ REST_FRAMEWORK = {
         "akte_mitglied": os.environ.get("AKTE_DROSSEL_MITGLIED", "300/hour"),
         "akte_oeffentlich": os.environ.get("AKTE_DROSSEL_OEFFENTLICH", "120/min"),
     },
-    # Zahl der eigenen Proxys vor der API (für die IP in X-Forwarded-For bei den Drosseln).
-    "NUM_PROXIES": int(os.environ.get("AKTE_VERTRAUTE_PROXYS", "0")) or None,
+    # Zahl der eigenen Proxys vor der API (für die IP in X-Forwarded-For bei den Drosseln). 0 = nur die
+    # Verbindungsadresse; nie None, denn dann glaubte DRF einem X-Forwarded-For, den jeder selbst setzen kann.
+    "NUM_PROXIES": int(os.environ.get("AKTE_VERTRAUTE_PROXYS", "0")),
 }
 
 SIMPLE_JWT = {

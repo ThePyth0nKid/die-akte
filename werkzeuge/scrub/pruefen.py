@@ -118,7 +118,8 @@ def _fassungen(daten: bytes) -> list[bytes]:
         try:
             text = daten.decode("utf-8-sig")
         except UnicodeDecodeError:
-            text = None
+            # Kein UTF-8: als Windows-1252 lesen, damit Regeln mit Umlauten auch alte Dateien treffen.
+            text = daten.decode("cp1252", "replace")
     if text is None:
         return [daten]
     normal = unicodedata.normalize("NFC", text).encode("utf-8")
@@ -194,8 +195,10 @@ def staged_pruefen(regeln: list[Regel], max_mb: int = MAX_MB) -> list[Fund]:
     namen = _git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z", cwd=wurzel).split(b"\0")
     funde: list[Fund] = []
     for roh in filter(None, namen):
-        name = roh.decode("utf-8")
+        name = roh.decode("utf-8", "surrogateescape")
         funde += _pruefe_name(name, regeln)
+        if _git("ls-files", "-s", "--", name, cwd=wurzel).startswith(b"160000"):
+            continue  # Submodul (Gitlink): kein Inhalt in diesem Repo
         daten = _git("show", f":{name}", cwd=wurzel)
         if len(daten) > max_mb * 1024 * 1024:
             funde.append(_ungeprueft(name, f"größer als {max_mb} MB"))
@@ -269,10 +272,18 @@ def _maskiert(treffer: str) -> str:
     return f"{treffer[:4]!r}… ({len(treffer)} Zeichen)" if len(treffer) > 6 else "(kurz)"
 
 
+_COMMIT = re.compile(r"^[0-9a-f]{12}:")
+
+
+def _pfad(ort: str) -> str:
+    """Der Pfad ohne vorangestellten Commit (``abc123def456:docs/x.md`` → ``docs/x.md``)."""
+    return _COMMIT.sub("", ort, count=1)
+
+
 def ausgeben(funde: list[Fund], zeigen: bool) -> None:
-    # Orte, an denen eine private Regel den Pfad selbst trifft, erscheinen in keiner Zeile im Klartext.
-    verdeckt = {f.ort for f in funde if f.regel.privat and f.zeile == 0}
-    nummern = {ort: i for i, ort in enumerate(sorted(verdeckt), start=1)}
+    # Pfade, die eine private Regel selbst trifft, erscheinen in keiner Zeile im Klartext, in keinem Commit.
+    verdeckt = {_pfad(f.ort) for f in funde if f.regel.privat and f.zeile == 0}
+    nummern = {pfad: i for i, pfad in enumerate(sorted(verdeckt), start=1)}
     for f in funde:
         if f.regel is UNGEPRUEFT:
             text = f"nicht geprüft: {f.treffer}"
@@ -282,7 +293,7 @@ def ausgeben(funde: list[Fund], zeigen: bool) -> None:
             text = f"{f.regel.quelle} Regel {f.regel.nummer}: {f.treffer!r}"
         else:
             text = f"{f.regel.quelle} Regel {f.regel.nummer}: {_maskiert(f.treffer)} (Klartext mit --zeigen)"
-        ort = f.ort if zeigen or f.ort not in verdeckt else f"(Pfad {nummern[f.ort]} verdeckt)"
+        ort = f.ort if zeigen or _pfad(f.ort) not in verdeckt else f"(Pfad {nummern[_pfad(f.ort)]} verdeckt)"
         print(f"{ort}:{f.zeile}: {text}" if f.zeile else f"{ort} (Datei): {text}")
 
 
@@ -301,6 +312,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ohne", action="append", default=[], metavar="NAME",
                    help="bei --pfad diesen Ordnernamen überspringen (mehrfach möglich)")
     a = p.parse_args(argv)
+    for strom in (sys.stdout, sys.stderr):
+        if hasattr(strom, "reconfigure"):
+            strom.reconfigure(errors="replace")  # Dateinamen mit kaputter Kodierung brechen die Ausgabe nicht ab
 
     regeln, mit_privat = regeln_laden(a.nur_oeffentlich)
     if not mit_privat:

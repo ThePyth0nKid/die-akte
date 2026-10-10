@@ -82,7 +82,10 @@ def ablegen(schl: str, daten: bytes, mime: str) -> None:
     ziel = ordner / schl
     ziel.parent.mkdir(parents=True, exist_ok=True)
     if ziel.exists():
-        return
+        erwartet = _erwartet(schl)
+        if not erwartet or hashlib.sha256(ziel.read_bytes()).hexdigest() == erwartet:
+            return
+        # Vorhandene Kopie passt nicht zu ihrer Prüfsumme (halb geschrieben, Datenträgerfehler): ersetzen.
     # Erst vollständig in eine Nachbardatei, dann umbenennen: nie eine halbe Kopie unter dem endgültigen Namen.
     tmp = ziel.with_name(f".{ziel.name}.{secrets.token_hex(6)}.neu")
     try:

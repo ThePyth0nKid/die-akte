@@ -109,7 +109,11 @@ Format: [`atlas-trace-v1`](https://github.com/ThePyth0nKid/atlas) (Prüfer unter
 ## Bekannte Grenzen von 0.1
 
 * Der Browser bestätigt die Freigabe mit einer Zusammenfassung, rechnet die zu signierenden Bytes aber nicht selbst
-  nach; er vertraut darin dem eigenen, lokalen Server.
+  nach; er vertraut darin dem eigenen, lokalen Server. Weil die Nutzlast nur die Zusage trägt und das Salz erst mit
+  der Offenlegung kommt, kann er auch nicht prüfen, dass die Zusage genau den angezeigten Inhalt bindet. Ein
+  manipulierter Server könnte also etwas anderes unterschreiben lassen; spätestens die Offenlegung im Export würde
+  dann nicht zum gezeigten Stand passen. Nachrechnen im Browser (kanonisches JSON, Zusage, Signing-Input) ist für
+  eine spätere Version vorgesehen.
 * Wer Zugang zur Datenbank oder zur Django-Verwaltung hat, kann einen Status ohne Unterschrift auf „freigegeben“
   setzen. Die Lese-Ansicht zeigt solche Objekte (es gibt keine Unterschrift, mit der sie nicht übereinstimmen), die
   Kette enthält für sie aber keine Freigabe. Werkzeuge und Agenten können das nicht.
