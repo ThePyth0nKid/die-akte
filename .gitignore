@@ -1,0 +1,44 @@
+# Umgebung und Geheimnisse
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+token.txt
+
+# Daten, die nie ins Repo gehören
+*.sqlite3
+*.sqlite3-*
+/daten/
+/ausgabe/
+/beweise/
+backend/media/
+backend/.akte_beweise/
+backend/akte/fixtures/live_*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Node / Next
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Render
+render/ausgabe/
+render/_cache/
+
+# System
+.DS_Store
+Thumbs.db

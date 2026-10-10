@@ -1,0 +1,19 @@
+version = 1
+
+[[annotations]]
+path = ["mcp/**", "skills/**", "werkzeuge/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 ThePyth0nKid und Mitwirkende"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = ["docs/**", "demo/**", "README.md", "README.en.md", "CONTRIBUTING.md", "SECURITY.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 ThePyth0nKid und Mitwirkende"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+[[annotations]]
+path = ["backend/**", "web/**", "render/**", "compose*.yaml", "Caddyfile", "start/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 ThePyth0nKid und Mitwirkende"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

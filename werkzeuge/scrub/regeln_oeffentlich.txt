@@ -1,0 +1,38 @@
+# Öffentliche Regeln für werkzeuge/scrub/pruefen.py (SPDX-License-Identifier: MIT)
+# Eine Regex je Zeile, Groß-/Kleinschreibung egal; "CS:" = mit Groß-/Kleinschreibung.
+# Platzhalter wie C:\Users\<name>\ sind erlaubt (das "<" nach dem Pfadtrenner).
+
+# Persönliche Pfade
+\b[A-Za-z]:[\\/]{1,2}Users[\\/]{1,2}(?!<|\{|\$|Public\b)
+(^|[\s"'(=])/c/Users/(?!<|\{|\$)
+(^|[\s"'(=])/home/(?!<|\{|\$|runner\b|user\b|app\b|node\b|pwuser\b)[a-z][a-z0-9_-]+/
+(^|[\s"'(=])/Users/(?!<|\{|\$|Shared\b)[A-Za-z][A-Za-z0-9_-]+/
+\b[D-Z]:[\\/]{1,2}(?!<|\{)[A-Za-z]
+
+# Private Netze und Geräte
+\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b
+\b192\.168\.\d{1,3}\.\d{1,3}\b
+\b172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b
+\b100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b
+\b([0-9A-F]{2}:){5}[0-9A-F]{2}\b
+
+# E-Mail-Adressen außer Beispiel-, noreply- und Projektadressen
+\b[A-Za-z0-9._%+-]+@(?!example\.(org|com|net)\b|beispiel\.test\b|users\.noreply\.github\.com\b|anthropic\.com\b|localhost\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b
+
+# Schlüssel und Tokens
+sk-ant-[A-Za-z0-9_-]{20,}
+\bsk_[0-9a-f]{40,}\b
+\bsk-[A-Za-z0-9]{32,}\b
+\bghp_[A-Za-z0-9]{30,}
+\bgithub_pat_[A-Za-z0-9_]{30,}
+\bxox[abpr]-[A-Za-z0-9-]{10,}
+\btvly-[A-Za-z0-9-]{16,}
+\bjina_[A-Za-z0-9]{20,}
+\bAKIA[0-9A-Z]{16}\b
+-----BEGIN ([A-Z]+ )?PRIVATE KEY-----
+\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}
+\bphc_[A-Za-z0-9]{30,}
+
+# Interne Verweise aus dem Ursprungsprojekt
+CS:\bFalle \d+\b
+CS:\bFallen \d+[–-]\d+\b

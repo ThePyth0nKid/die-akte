@@ -1,0 +1,10 @@
+#!/bin/sh
+# Vor jedem Commit: Geheimnisse (gitleaks) und Sperrliste (werkzeuge/scrub/pruefen.py) auf den gestagten Dateien.
+set -e
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner
+else
+  echo "Hinweis: gitleaks nicht installiert, nur die Sperrliste wird geprueft." >&2
+fi
+PY=python3; "$PY" -c "" >/dev/null 2>&1 || PY=python
+"$PY" werkzeuge/scrub/pruefen.py --staged

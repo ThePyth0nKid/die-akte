@@ -1,0 +1,4 @@
+#!/bin/sh
+# Commit-Nachricht gegen dieselben Regeln pruefen.
+PY=python3; "$PY" -c "" >/dev/null 2>&1 || PY=python
+exec "$PY" werkzeuge/scrub/pruefen.py --nachricht "$1"
