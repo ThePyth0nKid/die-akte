@@ -2,6 +2,7 @@
 
 // Die Obsidian-Seite einer Karte: Notiz mit [[Links]], Fäden mit Belegen, Rückverweise.
 
+import { freigebenMitUnterschrift, zusammenfassung } from "@/lib/akte/unterschrift"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { ExternalLink, Pencil, X } from "lucide-react"
@@ -42,7 +43,19 @@ export default function NotizLeiste({ id, schliessen, geaendert, fadenOeffnen, l
     if (!e) return
     try {
       const { name, typ, kurzbeschreibung, bild_url, notiz_md, oeffentliche_person, status, wikidata_qid } = entwurf
-      await akte.entitaetAendern(e.id, { name, typ, kurzbeschreibung, bild_url, notiz_md, oeffentliche_person, status, wikidata_qid })
+      // Freigeben heißt unterschreiben: erst die Inhalte speichern, dann die Freigabe mit dem eigenen Schlüssel.
+      const freigeben = status === "freigegeben" && e.status !== "freigegeben"
+      await akte.entitaetAendern(e.id, {
+        name, typ, kurzbeschreibung, bild_url, notiz_md, oeffentliche_person, status: freigeben ? e.status : status, wikidata_qid,
+      })
+      if (freigeben && !(await freigebenMitUnterschrift("karte", e.id, {
+          begruendung: (b) => window.prompt(`Sperrender Befund: ${b.text}
+
+Begründung, warum du ihn überstimmst:`),
+          bestaetigen: (vb) => window.confirm(zusammenfassung(vb)),
+        }))) {
+        setFehler("Freigabe abgebrochen. Die Änderungen sind gespeichert, die Karte bleibt Entwurf.")
+      }
       setE(await akte.entitaet(e.id))
       setBearbeiten(false)
       setFehler("")
@@ -102,7 +115,7 @@ export default function NotizLeiste({ id, schliessen, geaendert, fadenOeffnen, l
             <label className="block"><span className={etikett}>Status</span>
               <select className={feld} value={entwurf.status} onChange={(ev) => setze("status", ev.target.value as Status)}>
                 <option value="entwurf">Entwurf</option>
-                <option value="freigegeben">Freigegeben</option>
+                <option value="freigegeben">Freigeben (unterschreiben)</option>
               </select>
             </label>
             <label className="block"><span className={etikett}>Notiz (Markdown, [[Name]] verlinkt)</span>

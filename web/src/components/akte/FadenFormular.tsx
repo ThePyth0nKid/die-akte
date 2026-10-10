@@ -3,6 +3,7 @@
 // Einen Faden anlegen oder ändern — mit Zeitraum, Aussageart und Belegen.
 // Die Prüfung im Backend sagt nach dem Speichern, was vor der Veröffentlichung fehlt.
 
+import { freigebenMitUnterschrift, zusammenfassung } from "@/lib/akte/unterschrift"
 import { useEffect, useState } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { akte } from "@/lib/akte/api"
@@ -99,8 +100,25 @@ export default function FadenFormular({ von, nach, vorhanden, fertig }: Props) {
       anhoerung_antwort_am: v.anhoerung_antwort_am || null,
       belege: belege.map(({ quelle, zitat_woertlich, fundstelle }) => ({ quelle, zitat_woertlich, fundstelle })),
     }
+    // Freigeben heißt unterschreiben: erst speichern, dann die Freigabe mit dem eigenen Schlüssel.
+    const freigeben = v.status === "freigegeben" && vorhanden?.status !== "freigegeben"
+    if (freigeben) daten.status = (vorhanden?.status ?? "entwurf") as Status
     try {
-      const ergebnis = vorhanden ? await akte.fadenAendern(vorhanden.id, daten) : await akte.fadenAnlegen(daten)
+      let ergebnis = vorhanden ? await akte.fadenAendern(vorhanden.id, daten) : await akte.fadenAnlegen(daten)
+      if (freigeben) {
+        const ok = await freigebenMitUnterschrift("faden", ergebnis.id, {
+          begruendung: (b) => window.prompt(`Sperrender Befund: ${b.text}
+
+Begründung, warum du ihn überstimmst:`),
+          bestaetigen: (vb) => window.confirm(zusammenfassung(vb)),
+        })
+        if (!ok) {
+          setFehler("Freigabe abgebrochen. Der Faden ist gespeichert und bleibt Entwurf.")
+          setLaeuft(false)
+          return
+        }
+        ergebnis = { ...ergebnis, status: "freigegeben" as Status }
+      }
       fertig(ergebnis)
     } catch (err) {
       setFehler(err instanceof Error ? err.message : "Speichern fehlgeschlagen.")
@@ -280,7 +298,7 @@ export default function FadenFormular({ von, nach, vorhanden, fertig }: Props) {
             <span className={etikett + " mb-0"}>Status</span>
             <select className={`${feld} w-auto`} value={v.status} onChange={(e) => setze("status", e.target.value as Status)}>
               <option value="entwurf">Entwurf</option>
-              <option value="freigegeben">Freigegeben</option>
+              <option value="freigegeben">Freigeben (unterschreiben)</option>
             </select>
           </label>
           <button type="submit" disabled={laeuft} className="min-h-11 cursor-pointer rounded bg-[#FF1744] px-6 font-semibold text-white disabled:opacity-40">

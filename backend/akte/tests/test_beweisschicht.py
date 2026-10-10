@@ -100,6 +100,7 @@ class BeweisschichtTest(TestCase):
         ohne = self._freigeben("faden", verdacht.pk)
         self.assertEqual(ohne.status_code, 400)
         self.assertIn("Begründung", ohne.json()["detail"])
+        self.assertEqual([b["code"] for b in ohne.json()["fehlende_begruendung"]], ["verdacht_privatperson"])
         mit = self._freigeben("faden", verdacht.pk, {"verdacht_privatperson": "Gerichtlich festgestellt, Az. 1/2."})
         self.assertEqual(mit.status_code, 201, mit.content)
         self.assertTrue(Ueberstimmung.objects.filter(verbindung=verdacht, code="verdacht_privatperson").exists())

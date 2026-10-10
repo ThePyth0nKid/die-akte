@@ -34,7 +34,7 @@ def _nur_mensch(request):
 
 
 def _fehler(f: BeweisFehler) -> Response:
-    return Response({"detail": str(f)}, status=f.status)
+    return Response({"detail": str(f), **f.daten}, status=f.status)
 
 
 class _Mensch(APIView):

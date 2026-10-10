@@ -61,9 +61,10 @@ _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 class BeweisFehler(Exception):
     """Fachlicher Fehler der Beweisschicht (wird zu 400/409)."""
 
-    def __init__(self, text: str, status: int = 400):
+    def __init__(self, text: str, status: int = 400, daten: dict | None = None):
         super().__init__(text)
         self.status = status
+        self.daten = daten or {}
 
 
 # ─── Grundlagen ──────────────────────────────────────────────────────────────
@@ -245,14 +246,19 @@ def freigabe_vorbereiten(nutzer, objekt, art: str, kid: str, ueberstimmungen: di
     payload_ueber, offen = [], []
     if art == "faden":
         befunde = [b for b in pruefe_verbindung(objekt, ohne_zustand=True)]
+        fehlend = []
         for b in befunde:
             if b.schwere == "sperrt":
                 grund = (ueberstimmungen.get(b.code) or "").strip()
                 if not grund:
-                    raise BeweisFehler(f"Sperrender Befund „{b.text}“: zum Überstimmen eine Begründung angeben.")
+                    fehlend.append({"code": b.code, "text": b.text})
+                    continue
                 payload_ueber.append({"code": b.code, "begruendung": grund})
             else:
                 offen.append(b.code)
+        if fehlend:
+            raise BeweisFehler("Sperrende Befunde: zum Überstimmen je eine Begründung angeben.", 400,
+                               {"fehlende_begruendung": fehlend})
         inhalt = inhalt_faden(objekt)
     else:
         inhalt = inhalt_karte(objekt)
