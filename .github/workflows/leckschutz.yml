@@ -12,26 +12,45 @@ jobs:
   geheimnisse-und-sperrliste:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: gitleaks über die ganze Historie
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
         run: |
-          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --redact --no-banner
+          curl -sSfLo gitleaks.tar.gz             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git --redact --no-banner .
+
+      # Die private Sperrliste kommt nur bei Push im Original-Repo aus einem Actions-Secret. Pull Requests bekommen
+      # sie nie: Der PR-Stand könnte das Prüfskript verändern und das Secret ausgeben. Sie prüfen die öffentlichen
+      # Regeln; die volle Prüfung folgt beim Push.
       - name: Sperrliste über Arbeitsbaum und Historie
         env:
-          # Private Regeln kommen aus einem Secret; in Forks gibt es das nicht, dann gelten nur die öffentlichen.
-          OSS_SCRUB_SPERRLISTE_INHALT: ${{ secrets.OSS_SCRUB_SPERRLISTE_INHALT }}
+          OSS_SCRUB_SPERRLISTE_INHALT: ${{ github.event_name != 'pull_request' && secrets.OSS_SCRUB_SPERRLISTE_INHALT || '' }}
+          IST_ORIGINAL: ${{ github.repository == 'ThePyth0nKid/die-akte' && github.event_name != 'pull_request' }}
         run: |
-          python werkzeuge/scrub/pruefen.py --alle
-          python werkzeuge/scrub/pruefen.py --historie
+          if [ -n "$OSS_SCRUB_SPERRLISTE_INHALT" ]; then
+            python3 werkzeuge/scrub/pruefen.py --alle --privat-pflicht
+            python3 werkzeuge/scrub/pruefen.py --historie --privat-pflicht
+          elif [ "$IST_ORIGINAL" = "true" ]; then
+            echo "::error::Secret OSS_SCRUB_SPERRLISTE_INHALT fehlt im Original-Repo."
+            exit 1
+          else
+            echo "::notice::Ohne private Sperrliste (Pull Request oder Fork): nur öffentliche Regeln."
+            python3 werkzeuge/scrub/pruefen.py --alle --nur-oeffentlich
+            python3 werkzeuge/scrub/pruefen.py --historie --nur-oeffentlich
+          fi
 
   lizenzen:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
-      - run: pip install reuse
-      - run: reuse lint
+      - run: pipx run --spec "reuse[charset-normalizer]==6.2.0" reuse lint

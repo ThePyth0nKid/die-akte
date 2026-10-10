@@ -70,7 +70,9 @@ def _regeln_lesen(text: str, privat: bool, quelle: str) -> list[Regel]:
         try:
             muster = re.compile(zeile.encode("utf-8"), flags)
         except re.error as fehler:
-            raise SystemExit(f"Regel {quelle}:{nr} ist keine gültige Regex: {fehler}") from None
+            # Bei der privaten Liste keine Musterteile ausgeben (die Meldung landet sonst im CI-Log).
+            grund = "" if privat else f": {fehler}"
+            raise SystemExit(f"Regel {quelle}:{nr} ist keine gültige Regex{grund}") from None
         regeln.append(Regel(nr, muster, privat, quelle))
     return regeln
 
@@ -190,12 +192,19 @@ def historie_pruefen(regeln: list[Regel]) -> list[Fund]:
     return eindeutig
 
 
+def _maskiert(treffer: str) -> str:
+    """Kurzform eines Treffers für Logs: echte Schlüssel sollen nie vollständig im (CI-)Log stehen."""
+    return f"{treffer[:4]!r}… ({len(treffer)} Zeichen)" if len(treffer) > 6 else "(kurz)"
+
+
 def ausgeben(funde: list[Fund], zeigen: bool) -> None:
     for f in funde:
         if f.regel.privat and not zeigen:
             text = f"private Regel {f.regel.nummer}"
-        else:
+        elif zeigen:
             text = f"{f.regel.quelle} Regel {f.regel.nummer}: {f.treffer!r}"
+        else:
+            text = f"{f.regel.quelle} Regel {f.regel.nummer}: {_maskiert(f.treffer)} (Klartext mit --zeigen)"
         ort = f"{f.ort}:{f.zeile}" if f.zeile else f"{f.ort} (Dateiname)"
         print(f"{ort}: {text}")
 
