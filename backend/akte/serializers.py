@@ -92,7 +92,7 @@ class SicherungSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sicherung
         fields = ["id", "art", "status", "sha256", "bytes", "mime", "dateiname", "fremd_url",
-                  "abgerufen_von", "gesichert_am", "fehler"]
+                  "abgerufen_von", "gesichert_am", "fehler", "beleg"]
         read_only_fields = fields
 
 
