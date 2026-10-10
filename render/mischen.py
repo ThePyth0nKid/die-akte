@@ -78,19 +78,46 @@ def lautheit(datei: Path) -> float:
     return float(werte[-1]) if werte else -70.0
 
 
+#: Mehr Verstärkung hebt nur Rauschen an: Eine so leise Spur ist kaputt oder falsch gewählt.
+MAX_GEWINN_DB = 24.0
+STUMM_LUFS = -60.0
+
+
+def gewinn_fuer(ziel_lufs: float, gemessen: float, was: str) -> float:
+    """Verstärkung auf die Ziel-Lautheit, gedeckelt. Eine stumme Spur bricht ab, statt Rauschen hochzuziehen."""
+    if gemessen <= STUMM_LUFS:
+        raise SystemExit(f"{was} ist praktisch stumm ({gemessen:.1f} LUFS). Datei prüfen.")
+    gewinn = ziel_lufs - gemessen
+    if gewinn > MAX_GEWINN_DB:
+        print(f"Hinweis: {was} ist sehr leise ({gemessen:.1f} LUFS); Verstärkung auf +{MAX_GEWINN_DB:.0f} dB begrenzt.",
+              file=sys.stderr)
+        gewinn = MAX_GEWINN_DB
+    return gewinn
+
+
 def auf_pegel(quelle: Path, ziel: Path, lufs: float, extra: str = "") -> None:
     """Linear auf Ziel-Lautheit bringen (kein Kompressor, das Verhältnis der Spur bleibt)."""
-    gewinn = lufs - lautheit(quelle)
+    gewinn = gewinn_fuer(lufs, lautheit(quelle), quelle.name)
     filter_ = f"volume={gewinn:.2f}dB" + (f",{extra}" if extra else "")
     lauf(["ffmpeg", "-v", "error", "-y", "-i", str(quelle), "-af", filter_, "-ac", "2", "-ar", "48000", str(ziel)])
 
 
-def klang_datei(art: str) -> Path:
+def _bank() -> dict:
     try:
-        bank = json.loads((BANK / "_BANK.json").read_text(encoding="utf-8"))
+        return json.loads((BANK / "_BANK.json").read_text(encoding="utf-8"))
     except FileNotFoundError:
         raise SystemExit(f"Klang-Bank fehlt: {BANK}") from None
-    kennung = (bank.get("_zuordnung") or {}).get(art) or KLANG[art]
+
+
+def klang_kennung(art: str, bank: dict | None = None) -> str:
+    """Die Kennung, die wirklich erklingt: Zuordnung der Bank vor dem Standard."""
+    bank = _bank() if bank is None else bank
+    return (bank.get("_zuordnung") or {}).get(art) or KLANG[art]
+
+
+def klang_datei(art: str) -> Path:
+    bank = _bank()
+    kennung = klang_kennung(art, bank)
     eintrag = bank.get(kennung)
     if not eintrag or not eintrag.get("da"):
         raise SystemExit(f"Klang {kennung} fehlt in der Bank")
@@ -192,7 +219,9 @@ def mischen(a: argparse.Namespace) -> None:
     else:
         lauf(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{dauer}", str(klaenge)])
     shutil.rmtree(vorrat)
-    (stems / "klangliste.json").write_text(json.dumps([{"klang": KLANG[k], "art": k, "ms": ms} for k, ms in liste], indent=1), encoding="utf-8")
+    bank = _bank() if liste else {}
+    (stems / "klangliste.json").write_text(json.dumps([{"klang": klang_kennung(k, bank), "art": k, "ms": ms}
+                                                       for k, ms in liste], indent=1), encoding="utf-8")
 
     # 4. Summe: Musik duckt unter der Stimme (Sidechain), dann alles zusammen, auf −14 / TP −1,5.
     summe_roh = stems / "_summe.wav"
@@ -203,7 +232,7 @@ def mischen(a: argparse.Namespace) -> None:
           "[st][md][2:a]amix=inputs=3:normalize=0[aus]",
           "-map", "[aus]", "-ac", "2", "-ar", "48000", "-t", f"{dauer}", str(summe_roh)])
     summe = stems / "summe.wav"
-    gewinn = ZIEL_SUMME - lautheit(summe_roh)
+    gewinn = gewinn_fuer(ZIEL_SUMME, lautheit(summe_roh), "Die Summe")
     lauf(["ffmpeg", "-v", "error", "-y", "-i", str(summe_roh), "-af",
           # Limiter mit vierfacher Abtastung: sonst Überschwinger zwischen den Samples (True Peak 0 dB statt −1,5).
           f"volume={gewinn:.2f}dB,aresample=192000,alimiter=limit=0.8:level=false:attack=3:release=60,aresample=48000",

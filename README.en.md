@@ -22,8 +22,10 @@ An ordinary database with three layers on top:
 3. **Output layer.** Deterministic camera flights over the board, rendered frame by frame to video (16:9, 9:16, 1:1),
    optionally with voice, music and highlighted evidence.
 
-Agents (tool tokens, MCP) cannot release, delete or publish anything. Releasing means signing in the browser with a
-non-extractable WebCrypto Ed25519 key; blocking findings can be overruled with a justification that is signed too.
+Agents (tool tokens, MCP) cannot release, delete or publish anything, and they cannot change a published board.
+Releasing means signing in the browser with a non-extractable WebCrypto Ed25519 key; blocking findings can be
+overruled with a justification that is signed (and published) too. Each rule can be set per board to off, hint or
+blocking ("Regeln"). Readers only ever see what a human has signed.
 
 ## Run it on your machine
 

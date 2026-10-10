@@ -26,7 +26,8 @@ Die Prüfung **berät**, der Mensch **entscheidet**. Jede Regel ist einzeln eins
 | `familie_privatperson` | Familienbande einer Privatperson | **sperrt** |
 
 Dazu kommen **Zustandsregeln**, die immer sperren und sich nicht überstimmen lassen, weil sie beschreiben, ob ein
-Mensch unterschrieben hat: `faden_nicht_freigegeben`, `karte_nicht_freigegeben`, `veraendert_seit_freigabe`.
+Mensch unterschrieben hat: `faden_nicht_freigegeben`, `karte_nicht_freigegeben`, `veraendert_seit_freigabe` (auch,
+wenn sich eine der beiden Karten seit ihrer Freigabe verändert hat).
 
 ## Einstellen
 
@@ -36,7 +37,8 @@ Für alle Boards in `.env` (JSON):
 AKTE_REGELN={"quelle_ohne_archiv": "sperrt", "zeitraum_offen": "aus"}
 ```
 
-Für ein Board über die API (nur ein Mensch, kein Token; ein Schalter in der Oberfläche folgt):
+Für ein Board in der Oberfläche: Knopf **„Regeln“** in der Werkzeugleiste, je Regel aus/Hinweis/sperrt, „Auf
+Standard zurücksetzen“ macht die Board-Einstellung leer. Dasselbe über die API (nur ein Mensch, kein Token):
 
 ```
 PATCH /api/v1/akte/boards/<slug>/   {"regeln": {"ohne_quelle": "sperrt"}}

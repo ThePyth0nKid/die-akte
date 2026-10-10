@@ -80,6 +80,8 @@ jobs:
         env:
           AKTE_BACKEND_PYTHON: python
         run: pytest -q
+      - name: Leckschutz-Prüfer (eigene Tests)
+        run: pytest -q werkzeuge/scrub
 
   render:
     runs-on: ubuntu-latest

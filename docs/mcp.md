@@ -28,7 +28,7 @@ Ohne `AKTE_TOKEN` startet der Server im **Lesemodus**: nur Boards, die ohne Kont
 | `zitat_pruefen` | Token | steht das Zitat wörtlich in der Quelle? |
 | `gruppen_setzen`, `aufraeumen` | Token | Themen-Rahmen, Wand ordnen |
 | `fahrt_anlegen` | Token | Kamerafahrt für ein Video |
-| `zettel_anlegen` | Token | Notiz, Frage, Meinung |
+| `zettel_anlegen` | Token | Notiz oder Frage (Meinungs-Zettel schreibt nur ein Mensch) |
 | `import_paket` | Token | viele Einträge auf einmal; Probelauf zuerst, schreiben nur mit Bestätigung |
 | `sichern` | Token | Beweissicherung neu anstoßen |
 

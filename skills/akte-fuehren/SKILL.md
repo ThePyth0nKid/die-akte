@@ -20,8 +20,12 @@ tut ein Mensch in der Oberfläche mit seiner Unterschrift.
 4. **Verfahrensstand statt Absicht:** beantragt ≠ genehmigt, Entwurf ≠ Gesetz, Festnahme ≠ Anklage,
    erwähnt ≠ Kontakt ≠ schuldig. Keine Charakterwörter.
 5. **Privatpersonen** (`oeffentliche_person = false`) nie mit Verdacht oder Familie verbinden; öffentlich erscheinen
-   sie nur mit Initialen.
+   sie nur mit Initialen. `oeffentliche_person: true` ist nur ein Vorschlag: Bis ein Mensch die Karte unterschreibt,
+   erscheint auch diese Person mit Initialen, und eine bestehende Karte machst du nie öffentlich.
 6. **Befunde melden, nicht wegreden.** Die Prüfung berät, der Mensch entscheidet.
+7. **Veröffentlichte Boards fasst du nicht an.** Auf öffentlichen Boards und Mitglieder-Boards sind Karten, Zettel,
+   Rahmen und Mappen Sache der Redaktion; du arbeitest auf einem Arbeits-Board. Anordnung und Fahrten gehen überall.
+   Zettel legst du nur als Notiz oder Frage an; Meinungs-Zettel schreibt ein Mensch.
 
 ## 2. Ablauf für ein Thema
 
@@ -58,5 +62,7 @@ Eine Station je Gedanke des Skripts. `fahrt_anlegen` ersetzt eine Fahrt mit glei
 6. **„Erwähnt“ ist kein Faden.** Dass zwei Namen im selben Dokument stehen, belegt keine Verbindung.
 7. **Fotos nur mit Lizenz.** Bild-URL und Nachweis (Urheber, Lizenz) gehören zusammen; sonst kein Bild.
 8. **Nie freigeben wollen.** Wenn etwas „fertig“ ist, sagst du es der Redaktion; die unterschreibt.
+9. **Leser sehen nur Unterschriebenes.** Was du anlegst, ist für Mitglieder und Besucher unsichtbar, bis ein Mensch
+   es freigibt. Ein leeres `wand_lesen` ohne Token heißt also nicht, dass nichts da ist.
 
 Mehr: `docs/belegregeln.md` (Regeln und Stufen), `docs/mcp.md` (Werkzeuge), `docs/sicherheit.md` (Beweiskette).

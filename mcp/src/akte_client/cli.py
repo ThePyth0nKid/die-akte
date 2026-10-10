@@ -36,7 +36,7 @@ from .client import Akte, AkteFehler
 
 
 def lade_datei(pfad: str):
-    text = Path(pfad).read_text(encoding="utf-8")
+    text = Path(pfad).read_text(encoding="utf-8-sig")  # mit oder ohne BOM (Windows-Editoren)
     if pfad.endswith((".yaml", ".yml")):
         import yaml
 
@@ -183,7 +183,7 @@ def _ausfuehren(a: argparse.Namespace) -> int:
         return 0 if erg["gueltig"] else 1
 
     if a.befehl == "export-oeffentlich":
-        namen = Path(a.privatnamen).read_text(encoding="utf-8").splitlines() if a.privatnamen else []
+        namen = Path(a.privatnamen).read_text(encoding="utf-8-sig").splitlines() if a.privatnamen else []
         boards = [s.strip() for s in a.boards.split(",")] if a.boards else None
         zeige(aktionen.export_oeffentlich(a.basis, Path(a.ziel), boards=boards, stand=a.stand, lizenz=a.lizenz,
                                           herausgeber=a.herausgeber, privatnamen=namen))

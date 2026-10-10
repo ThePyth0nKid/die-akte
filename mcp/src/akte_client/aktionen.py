@@ -10,7 +10,11 @@ import csv
 import hashlib
 import io
 import json
+import re
+import secrets
+import shutil
 import time
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -162,12 +166,19 @@ def beleg_hinzufuegen(akte: Akte, faden_id: int, quelle_id: int, zitat_woertlich
 
 
 def zitat_pruefen(akte: Akte, beleg_id: int, quelle_id: int, warten_s: int = 60, takt_s: float = 3.0) -> dict:
-    """Fundstelle eines Belegs anstoßen und auf das Ergebnis warten: Steht das Zitat wörtlich an der Quelle?"""
+    """Fundstelle eines Belegs anstoßen und auf das Ergebnis warten: Steht das Zitat wörtlich an der Quelle?
+
+    Zählt nur Ergebnisse, die nach dem Anstoß entstanden sind; ein altes „gefunden“ von vorgestern ist keine Antwort
+    auf die heutige Prüfung.
+    """
+    vorher = max((s["id"] for s in akte.sicherungen(quelle_id)
+                  if s["art"] == "fundstelle" and s.get("beleg") == beleg_id), default=0)
     akte.post(f"/quellen/{quelle_id}/sichern/")
     ende = time.monotonic() + max(0, warten_s)
     while True:
         for s in akte.sicherungen(quelle_id):
-            if s["art"] == "fundstelle" and s.get("beleg") == beleg_id and s["status"] in ("fertig", "fehler"):
+            if (s["art"] == "fundstelle" and s.get("beleg") == beleg_id and s["id"] > vorher
+                    and s["status"] in ("fertig", "fehler")):
                 gefunden = s["status"] == "fertig"
                 return {"ergebnis": "gefunden" if gefunden else "nicht_gefunden_oder_fehler",
                         "sicherung": s["id"], "hinweis": "" if gefunden else (s.get("fehler") or "")}
@@ -191,15 +202,65 @@ class ImportBericht:
         return self.__dict__.copy()
 
 
+_PFLICHT = {"quellen": ("schluessel", "titel"), "entitaeten": ("schluessel", "name", "typ"),
+            "verbindungen": ("von", "nach", "typ")}
+
+
+def _paket_pruefen(daten: dict) -> None:
+    """Fehlende Pflichtfelder als ``ValueError`` mit Stelle, nicht als ``KeyError`` mitten im Import."""
+    if not isinstance(daten, dict):
+        raise ValueError("Das Paket ist ein Objekt {board?, quellen, entitaeten, verbindungen}.")
+    fehler = []
+    for teil, felder in _PFLICHT.items():
+        liste = daten.get(teil, [])
+        if not isinstance(liste, list):
+            fehler.append(f"{teil} ist keine Liste")
+            continue
+        for i, eintrag in enumerate(liste, 1):
+            if not isinstance(eintrag, dict):
+                fehler.append(f"{teil}[{i}] ist kein Objekt")
+                continue
+            fehlt = [f for f in felder if not str(eintrag.get(f) or "").strip()]
+            if fehlt:
+                fehler.append(f"{teil}[{i}]: {', '.join(fehlt)} fehlt")
+            if teil == "verbindungen":
+                for j, b in enumerate(eintrag.get("belege") or [], 1):
+                    if not isinstance(b, dict) or not b.get("quelle"):
+                        fehler.append(f"verbindungen[{i}].belege[{j}]: quelle fehlt")
+    if "board" in daten and not (isinstance(daten["board"], dict) and daten["board"].get("slug")
+                                 and daten["board"].get("titel")):
+        fehler.append("board braucht slug und titel")
+    if fehler:
+        raise ValueError("Paket unvollständig: " + "; ".join(fehler[:20]))
+
+
+def _vorhandene_quelle(akte: Akte, q: dict) -> dict | None:
+    """Mit Link: gleiche URL. Ohne Link: gleicher Titel und Herausgeber, ebenfalls ohne Link."""
+    if q.get("url"):
+        return next((x for x in akte.get("/quellen/", params={"q": q["url"]}) if x["url"] == q["url"]), None)
+    titel, herausgeber = q["titel"].strip(), (q.get("herausgeber") or "").strip()
+    return next((x for x in akte.get("/quellen/", params={"q": titel})
+                 if not x["url"] and x["titel"].strip() == titel and (x["herausgeber"] or "").strip() == herausgeber),
+                None)
+
+
 def importieren(akte: Akte, daten: dict, trocken: bool = True) -> dict:
     """Paket {board?, quellen, entitaeten, verbindungen} wie ``manage.py akte_import``, aber über die API.
-    ``trocken`` (Standard) liest nur und meldet, was angelegt würde."""
+    ``trocken`` (Standard) liest nur und meldet, was angelegt würde.
+
+    Wiederholbar: Vorhandenes wird erkannt (Quellen an URL bzw. Titel und Herausgeber, Karten am Namen, Fäden an
+    von/nach/typ/beschreibung), auch innerhalb desselben Pakets.
+    """
+    _paket_pruefen(daten)
     bericht = ImportBericht(trocken=trocken)
     quellen: dict[str, int | None] = {}
+    im_paket_q: dict[tuple, int | None] = {}
     for q in daten.get("quellen", []):
-        vorhanden = None
-        if q.get("url"):
-            vorhanden = next((x for x in akte.get("/quellen/", params={"q": q["url"]}) if x["url"] == q["url"]), None)
+        kennung = ("url", q["url"]) if q.get("url") else ("titel", q["titel"].strip(), (q.get("herausgeber") or "").strip())
+        if kennung in im_paket_q:
+            quellen[q["schluessel"]] = im_paket_q[kennung]
+            continue
+        vorhanden = _vorhandene_quelle(akte, q)
         if vorhanden:
             quellen[q["schluessel"]] = vorhanden["id"]
         elif trocken:
@@ -210,19 +271,25 @@ def importieren(akte: Akte, daten: dict, trocken: bool = True) -> dict:
                                  q.get("abgerufen_am"), q.get("veroeffentlicht_am"))
             quellen[q["schluessel"]] = obj["id"]
             bericht.quellen_neu.append(q["titel"])
+        im_paket_q[kennung] = quellen[q["schluessel"]]
     entitaeten: dict[str, int | None] = {}
+    im_paket_e: dict[str, int | None] = {}
     for e in daten.get("entitaeten", []):
-        vorhanden = akte.entitaet_finden(e["name"])
+        name = e["name"].strip()
+        if name.casefold() in im_paket_e:
+            entitaeten[e["schluessel"]] = im_paket_e[name.casefold()]
+            continue
+        vorhanden = akte.entitaet_finden(name)
         if vorhanden:
-            entitaeten[e["schluessel"]] = vorhanden["id"]
+            entitaeten[e["schluessel"]] = im_paket_e[name.casefold()] = vorhanden["id"]
             continue
-        bericht.karten_neu.append(e["name"])
+        bericht.karten_neu.append(name)
         if trocken:
-            entitaeten[e["schluessel"]] = None
+            entitaeten[e["schluessel"]] = im_paket_e[name.casefold()] = None
             continue
-        obj, _ = akte.entitaet(e["name"], e["typ"], e.get("kurzbeschreibung", ""), e.get("oeffentliche_person", False),
+        obj, _ = akte.entitaet(name, e["typ"], e.get("kurzbeschreibung", ""), e.get("oeffentliche_person", False),
                                e.get("notiz_md", ""))
-        entitaeten[e["schluessel"]] = obj["id"]
+        entitaeten[e["schluessel"]] = im_paket_e[name.casefold()] = obj["id"]
         neu = bild_aenderung(obj, e)
         if neu:
             akte.patch(f"/entitaeten/{obj['id']}/", neu)
@@ -236,11 +303,14 @@ def importieren(akte: Akte, daten: dict, trocken: bool = True) -> dict:
     if bericht.fehler:
         return bericht.als_dict()
     vorhanden_faeden = {(f["von"], f["nach"], f["typ"], f["beschreibung"]) for f in akte.get("/verbindungen/")}
+    im_paket_f: set[tuple] = set()
     for v in daten.get("verbindungen", []):
         schluessel = (entitaeten[v["von"]], entitaeten[v["nach"]], v["typ"], v.get("beschreibung", ""))
-        if None not in schluessel[:2] and schluessel in vorhanden_faeden:
+        paket_schluessel = (v["von"], v["nach"], v["typ"], v.get("beschreibung", ""))
+        if (None not in schluessel[:2] and schluessel in vorhanden_faeden) or paket_schluessel in im_paket_f:
             bericht.faeden_vorhanden += 1
             continue
+        im_paket_f.add(paket_schluessel)
         bericht.faeden_neu += 1
         if trocken:
             continue
@@ -291,13 +361,55 @@ def _json(daten: Any) -> bytes:
     return (json.dumps(daten, ensure_ascii=False, sort_keys=True, indent=1) + "\n").encode("utf-8")
 
 
+_ZAHL = re.compile(r"^-?\d+([.,]\d+)?$")
+
+
+def _zelle(wert: Any) -> Any:
+    """Keine Formeln für Tabellenprogramme: Text, der mit = + - @ Tab oder Zeilenumbruch beginnt, bekommt ein
+    Apostroph davor (negative Zahlen bleiben Zahlen). Im JSON stehen die Werte unverändert."""
+    if wert is None:
+        return ""
+    if isinstance(wert, str) and wert[:1] in ("=", "+", "-", "@", "\t", "\r") and not _ZAHL.match(wert):
+        return "'" + wert
+    return wert
+
+
 def _csv(zeilen: list[dict], spalten: list[str]) -> bytes:
     puffer = io.StringIO(newline="")
     schreiber = csv.DictWriter(puffer, fieldnames=spalten, extrasaction="ignore", lineterminator="\n")
     schreiber.writeheader()
     for z in zeilen:
-        schreiber.writerow({k: ("" if z.get(k) is None else z.get(k)) for k in spalten})
+        schreiber.writerow({k: _zelle(z.get(k)) for k in spalten})
     return puffer.getvalue().encode("utf-8")
+
+
+_SLUG = re.compile(r"^[A-Za-z0-9_-]{1,200}$")
+
+
+def _ersetzen(ziel: Path, dateien: dict[str, bytes], pruefsummen: bytes) -> None:
+    """Erst alles in einen Nachbarordner schreiben, dann tauschen: nie ein halber Export unter dem Zielnamen.
+
+    Ein vorhandenes Ziel wird nur ersetzt, wenn es leer ist oder selbst ein Export ist (index.json mit Schema).
+    """
+    if ziel.exists():
+        index = ziel / "index.json"
+        ist_export = index.is_file() and EXPORT_SCHEMA in index.read_text(encoding="utf-8", errors="replace")
+        if not ist_export and any(ziel.iterdir()):
+            raise ValueError(f"{ziel} ist nicht leer und kein früherer Export. Bitte ein leeres Ziel angeben.")
+    neu = ziel.with_name(f".{ziel.name}.neu-{secrets.token_hex(4)}")
+    alt = ziel.with_name(f".{ziel.name}.alt-{secrets.token_hex(4)}")
+    try:
+        for name, inhalt in dateien.items():
+            pfad = neu / name
+            pfad.parent.mkdir(parents=True, exist_ok=True)
+            pfad.write_bytes(inhalt)
+        (neu / "pruefsummen.sha256").write_bytes(pruefsummen)
+        if ziel.exists():
+            ziel.rename(alt)
+        neu.rename(ziel)
+    finally:
+        shutil.rmtree(neu, ignore_errors=True)
+        shutil.rmtree(alt, ignore_errors=True)
 
 
 def export_oeffentlich(basis: str, ziel: Path, *, boards: list[str] | None = None, stand: str = "",
@@ -312,6 +424,9 @@ def export_oeffentlich(basis: str, ziel: Path, *, boards: list[str] | None = Non
     akte = Akte(basis)
     alle = akte.boards()
     slugs = sorted(b["slug"] for b in alle if boards is None or b["slug"] in boards)
+    falsch = [s for s in slugs if not isinstance(s, str) or not _SLUG.match(s)]
+    if falsch:
+        raise ValueError(f"Unerwartete Board-Kennung vom Server: {falsch[0]!r}. Abbruch.")
     dateien: dict[str, bytes] = {}
     karten, faeden, belege, quellen, rahmen, zettel = [], [], [], {}, [], []
     for slug in slugs:
@@ -361,29 +476,25 @@ def export_oeffentlich(basis: str, ziel: Path, *, boards: list[str] | None = Non
     if treffer:
         raise ValueError("Datenschutz: Name einer Privatperson im Export (" + "; ".join(treffer[:10]) + "). Abbruch.")
 
-    ziel.mkdir(parents=True, exist_ok=True)
-    pruefsummen = []
-    for name in sorted(dateien):
-        pfad = ziel / name
-        pfad.parent.mkdir(parents=True, exist_ok=True)
-        pfad.write_bytes(dateien[name])
-        pruefsummen.append(f"{hashlib.sha256(dateien[name]).hexdigest()}  {name}")
-    (ziel / "pruefsummen.sha256").write_text("\n".join(pruefsummen) + "\n", encoding="utf-8", newline="\n")
+    pruefsummen = "".join(f"{hashlib.sha256(dateien[n]).hexdigest()}  {n}\n" for n in sorted(dateien))
+    _ersetzen(ziel, dateien, pruefsummen.encode("utf-8"))
     return {"boards": slugs, "dateien": len(dateien) + 1, "karten": len(karten), "faeden": len(faeden),
             "belege": len(belege), "quellen": len(quellen)}
 
 
+def _normal(text: str) -> str:
+    """Gleiche Schreibweise für den Vergleich: Unicode NFC, ohne Groß/Klein (auch ß/ss), Leerraum einfach."""
+    return " ".join(unicodedata.normalize("NFC", text).casefold().split())
+
+
 def datenschutz_treffer(dateien: dict[str, bytes], privatnamen: list[str]) -> list[str]:
     """Volle Namen (und ihre URL-Schreibweisen) von Privatpersonen in den erzeugten Dateien suchen."""
+    texte = {datei: _normal(inhalt.decode("utf-8", "replace")) for datei, inhalt in dateien.items()}
     treffer = []
     for name in privatnamen:
-        name = name.strip()
+        name = _normal(name.lstrip("\ufeff"))
         if len(name) < 4:
             continue
-        formen = {name.lower(), name.lower().replace(" ", "-"), name.lower().replace(" ", "_"),
-                  name.lower().replace(" ", "%20"), name.lower().replace(" ", "+")}
-        for datei, inhalt in dateien.items():
-            text = inhalt.decode("utf-8", "replace").lower()
-            if any(f in text for f in formen):
-                treffer.append(f"{datei}")
+        formen = {name, name.replace(" ", "-"), name.replace(" ", "_"), name.replace(" ", "%20"), name.replace(" ", "+")}
+        treffer += [datei for datei, text in texte.items() if any(f in text for f in formen)]
     return sorted(set(treffer))

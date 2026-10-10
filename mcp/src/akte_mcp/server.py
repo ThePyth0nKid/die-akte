@@ -245,11 +245,15 @@ def bauen(akte: Akte) -> FastMCP:
             return _fehler(e)
 
     @mcp.tool(annotations=SCHREIBEN_NETZ)
-    def zitat_pruefen(beleg: int, quelle: int, warten_s: int = 60) -> dict:
+    async def zitat_pruefen(beleg: int, quelle: int, warten_s: int = 60) -> dict:
         """Prüfen lassen, ob das Zitat eines Belegs wörtlich an der Quelle steht (Fundstelle mit Markierung).
-        Ergebnis: gefunden, nicht_gefunden_oder_fehler oder laeuft."""
+        Ergebnis: gefunden, nicht_gefunden_oder_fehler oder laeuft. Wartet in einem eigenen Thread, damit der
+        Server währenddessen andere Aufrufe beantwortet."""
+        import anyio
+
         try:
-            return aktionen.zitat_pruefen(akte, beleg, quelle, max(0, min(warten_s, 180)))
+            return await anyio.to_thread.run_sync(
+                lambda: aktionen.zitat_pruefen(akte, beleg, quelle, max(0, min(warten_s, 180))))
         except Exception as e:  # noqa: BLE001
             return _fehler(e)
 

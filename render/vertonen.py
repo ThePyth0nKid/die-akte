@@ -35,8 +35,13 @@ MODELL = "eleven_multilingual_v2"
 TON_DATEI = Path(os.environ.get("AKTE_TON", "ton.yaml"))
 
 
-def stimmen(datei: Path = TON_DATEI) -> dict[str, tuple[str, dict]]:
+#: Grenzen der Musik-Schnittstelle (10 s bis 5 min) und der Varianten je Lauf (jede kostet Guthaben).
+MUSIK_MIN_MS, MUSIK_MAX_MS, MUSIK_MAX_VARIANTEN = 10_000, 300_000, 4
+
+
+def stimmen(datei: Path | None = None) -> dict[str, tuple[str, dict]]:
     """Stimmen aus ton.yaml: {stimmen: {name: {voice_id: …, einstellungen: {stability: …, …}}}}."""
+    datei = datei or TON_DATEI
     if not datei.exists():
         raise SystemExit(f"{datei} fehlt. Vorlage: render/ton.beispiel.yaml kopieren und Stimm-IDs eintragen.")
     daten = yaml.safe_load(datei.read_text(encoding="utf-8")) or {}
@@ -243,6 +248,10 @@ MUSIK_PROMPT = (
 
 
 def musik(a: argparse.Namespace) -> None:
+    if not MUSIK_MIN_MS <= a.laenge_ms <= MUSIK_MAX_MS:
+        raise SystemExit(f"--laenge-ms zwischen {MUSIK_MIN_MS} und {MUSIK_MAX_MS} (die Schnittstelle kann nicht mehr).")
+    if not 1 <= a.varianten <= MUSIK_MAX_VARIANTEN:
+        raise SystemExit(f"--varianten zwischen 1 und {MUSIK_MAX_VARIANTEN} (jede Variante kostet Guthaben).")
     ziel = Path(a.ziel)
     ziel.mkdir(parents=True, exist_ok=True)
     for v in range(1, a.varianten + 1):
@@ -280,6 +289,7 @@ def main(argv=None) -> None:
     p.add_argument("video")
     p.add_argument("--stimme", required=True, help="Name der Stimme aus ton.yaml")
     p.add_argument("--ziel", required=True)
+    p.add_argument("--ton", help="Pfad zur ton.yaml (Standard: AKTE_TON, sonst ./ton.yaml)")
     p = sub.add_parser("musik")
     p.add_argument("--laenge-ms", type=int, required=True)
     p.add_argument("--ziel", required=True)
@@ -290,6 +300,9 @@ def main(argv=None) -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
     a = ap.parse_args(argv)
+    if getattr(a, "ton", None):
+        global TON_DATEI
+        TON_DATEI = Path(a.ton)
     {"stimme": stimme, "musik": musik, "gegenprobe": gegenprobe}[a.befehl](a)
 
 

@@ -92,8 +92,11 @@ Kette beweist und was nicht: [docs/sicherheit.md](docs/sicherheit.md).
 
 Wählst du in der Oberfläche „Freigeben (unterschreiben)“, erzeugt dein Browser beim ersten Mal ein Ed25519-Schlüsselpaar.
 Der private Schlüssel ist nicht exportierbar und verlässt den Browser nie; der Server kennt nur den öffentlichen.
-Sperrende Befunde kannst du mit einer Begründung überstimmen – die Begründung wird mitsigniert. Änderst du etwas
-Freigegebenes, wird es wieder Entwurf und braucht eine neue Unterschrift. Regeln und Stufen: [docs/belegregeln.md](docs/belegregeln.md).
+Sperrende Befunde kannst du mit einer Begründung überstimmen – die Begründung wird mitsigniert und mit dem Objekt
+veröffentlicht. Änderst du etwas Freigegebenes, wird es wieder Entwurf und braucht eine neue Unterschrift. Wie streng
+die Prüfung eines Boards ist, stellst du unter **„Regeln“** ein; dort widerrufst du auch einen Schlüssel, etwa nach
+dem Verlust eines Geräts. Leser sehen nur, was ein Mensch unterschrieben hat. Regeln und Stufen:
+[docs/belegregeln.md](docs/belegregeln.md).
 
 ## Videos aus der Wand
 
