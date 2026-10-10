@@ -20,7 +20,8 @@ services:
     build: ./web
     environment:
       DJANGO_API_URL: http://api:8000
-      COOKIE_SECURE: "false"
+      # Nur über HTTPS auf "true" stellen (eigener Server); lokal über http bleibt es aus.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       AKTE_TITEL: ${AKTE_TITEL:-Die Akte}
     depends_on:
       - api

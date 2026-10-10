@@ -3,7 +3,7 @@
 
 import { authFetch } from "@/lib/api"
 import type {
-  Board, Entitaet, EntitaetDetail, EntitaetKurz, Fahrt, Karte, Mappe, Quelle, Rahmen,
+  Board, Entitaet, EntitaetDetail, EntitaetKurz, Fahrt, Karte, Mappe, Pruefung, Quelle, Rahmen,
   Verbindung, Wand, Zettel,
 } from "./typen"
 
@@ -66,6 +66,7 @@ export const akte = {
   boardAendern: (slug: string, daten: Partial<Board>) =>
     anfrage<Board>(`/boards/${slug}/`, json("PATCH", daten)),
   wand: (slug: string) => lesen<Wand>(`/boards/${slug}/`),
+  pruefung: (slug: string) => anfrage<Pruefung>(`/boards/${slug}/pruefung/`),
 
   suchen: (q: string) => anfrage<EntitaetKurz[]>(`/entitaeten/?q=${encodeURIComponent(q)}`),
   entitaet: (id: number) => anfrage<EntitaetDetail>(`/entitaeten/${id}/`),

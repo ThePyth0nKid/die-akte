@@ -3,7 +3,7 @@
 // Einen Faden anlegen oder ändern — mit Zeitraum, Aussageart und Belegen.
 // Die Prüfung im Backend sagt nach dem Speichern, was vor der Veröffentlichung fehlt.
 
-import { freigebenMitUnterschrift, zusammenfassung } from "@/lib/akte/unterschrift"
+import { begruendungsFrage, freigebenMitUnterschrift, zusammenfassung } from "@/lib/akte/unterschrift"
 import { useEffect, useState } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { akte } from "@/lib/akte/api"
@@ -17,6 +17,8 @@ interface Props {
   nach: EntitaetKurz
   vorhanden?: Verbindung
   fertig: (v: Verbindung | null) => void
+  /** Board, auf dem freigegeben wird: dessen Prüfregeln gelten (etwa eine strengere Stufe). */
+  board?: string
 }
 
 const heute = () => new Date().toISOString().slice(0, 10)
@@ -26,7 +28,7 @@ const etikett = "mb-1 block font-[family-name:var(--font-akte-mono)] text-[11px]
 
 type NeueQuelle = Pick<Quelle, "url" | "titel" | "herausgeber" | "abgerufen_am" | "archiv_url" | "guete">
 
-export default function FadenFormular({ von, nach, vorhanden, fertig }: Props) {
+export default function FadenFormular({ von, nach, vorhanden, fertig, board }: Props) {
   const [v, setV] = useState({
     typ: (vorhanden?.typ ?? "amt") as VerbindungTyp,
     beschreibung: vorhanden?.beschreibung ?? "",
@@ -107,11 +109,9 @@ export default function FadenFormular({ von, nach, vorhanden, fertig }: Props) {
       let ergebnis = vorhanden ? await akte.fadenAendern(vorhanden.id, daten) : await akte.fadenAnlegen(daten)
       if (freigeben) {
         const ok = await freigebenMitUnterschrift("faden", ergebnis.id, {
-          begruendung: (b) => window.prompt(`Sperrender Befund: ${b.text}
-
-Begründung, warum du ihn überstimmst:`),
+          begruendung: (b) => window.prompt(begruendungsFrage(b)),
           bestaetigen: (vb) => window.confirm(zusammenfassung(vb)),
-        })
+        }, board)
         if (!ok) {
           setFehler("Freigabe abgebrochen. Der Faden ist gespeichert und bleibt Entwurf.")
           setLaeuft(false)

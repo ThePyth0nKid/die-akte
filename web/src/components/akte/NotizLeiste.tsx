@@ -2,7 +2,7 @@
 
 // Die Obsidian-Seite einer Karte: Notiz mit [[Links]], Fäden mit Belegen, Rückverweise.
 
-import { freigebenMitUnterschrift, zusammenfassung } from "@/lib/akte/unterschrift"
+import { begruendungsFrage, freigebenMitUnterschrift, zusammenfassung } from "@/lib/akte/unterschrift"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { ExternalLink, Pencil, X } from "lucide-react"
@@ -49,9 +49,7 @@ export default function NotizLeiste({ id, schliessen, geaendert, fadenOeffnen, l
         name, typ, kurzbeschreibung, bild_url, notiz_md, oeffentliche_person, status: freigeben ? e.status : status, wikidata_qid,
       })
       if (freigeben && !(await freigebenMitUnterschrift("karte", e.id, {
-          begruendung: (b) => window.prompt(`Sperrender Befund: ${b.text}
-
-Begründung, warum du ihn überstimmst:`),
+          begruendung: (b) => window.prompt(begruendungsFrage(b)),
           bestaetigen: (vb) => window.confirm(zusammenfassung(vb)),
         }))) {
         setFehler("Freigabe abgebrochen. Die Änderungen sind gespeichert, die Karte bleibt Entwurf.")

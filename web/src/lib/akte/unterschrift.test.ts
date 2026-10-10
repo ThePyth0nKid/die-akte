@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { b64url, b64urlLesen, zusammenfassung, type Vorbereitung } from "./unterschrift"
+import { AkteFehler } from "./api"
+import {
+  b64url, b64urlLesen, begruendungsFrage, HINWEIS_VEROEFFENTLICHUNG, ketteVeraendert, zusammenfassung, type Vorbereitung,
+} from "./unterschrift"
 
 describe("b64url", () => {
   it("hin und zurück ohne Auffüllung", () => {
@@ -25,5 +28,20 @@ describe("zusammenfassung", () => {
     expect(text).toContain("Offene Hinweise: ohne_start")
     expect(text).toContain("Überstimmt: quelle_ohne_archiv")
     expect(text).not.toContain("ende:")
+  })
+})
+
+describe("Veröffentlichung und Wiederholung", () => {
+  it("warnt, dass Begründungen veröffentlicht werden", () => {
+    expect(begruendungsFrage({ code: "verdacht_privatperson", text: "Kein Verdacht gegen Privatpersonen." }))
+      .toContain(HINWEIS_VEROEFFENTLICHUNG)
+    const v: Vorbereitung = { event_id: "", signing_input: "", event_hash: "ab", inhalt: {}, ueberstimmungen: [],
+      hinweise_offen: [] }
+    expect(zusammenfassung(v)).toContain(HINWEIS_VEROEFFENTLICHUNG)
+  })
+  it("wiederholt nur, wenn sich allein die Kette bewegt hat", () => {
+    expect(ketteVeraendert(new AkteFehler(409, { kette_veraendert: true }))).toBe(true)
+    expect(ketteVeraendert(new AkteFehler(409, { detail: "Inhalt geändert" }))).toBe(false)
+    expect(ketteVeraendert(new Error("x"))).toBe(false)
   })
 })

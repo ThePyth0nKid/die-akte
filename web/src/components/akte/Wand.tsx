@@ -12,7 +12,8 @@ import {
   useNodesInitialized, useReactFlow, type Connection, type Edge, type Node, type NodeChange, applyNodeChanges,
 } from "@xyflow/react"
 import {
-  ArrowLeft, FolderPlus, Frame, GitMerge, LayoutGrid, MapPin, Paperclip, Route, Search, StickyNote, Video,
+  ArrowLeft, FolderPlus, Frame, GitMerge, LayoutGrid, MapPin, Paperclip, Route, Search, ShieldCheck, StickyNote,
+  Video,
 } from "lucide-react"
 import { akte } from "@/lib/akte/api"
 import {
@@ -24,6 +25,7 @@ import { eintauchKamera, MAPPE_B, MAPPE_H, mappenAdresse, pfadLesen, zurueckAdre
 import {
   etikettBreite, etikettenVersatz, etikettHoehe, freierPlatz, passendeGroesse, type Rechteck,
 } from "@/lib/akte/ordnung"
+import { sperrt } from "@/lib/akte/typen"
 import type {
   Board, BoardVerweis, Buendel, EntitaetKurz, Fahrt, Mappe, Quelle, Station, Verbindung, Wand as WandDaten, Zettel,
 } from "@/lib/akte/typen"
@@ -37,6 +39,7 @@ import FahrtenLeiste from "./FahrtenLeiste"
 import { kantenTypen } from "./FadenKante"
 import { knotenTypen } from "./knoten"
 import NotizLeiste from "./NotizLeiste"
+import RegelnDialog from "./RegelnDialog"
 import { FadenLesen, KarteLesen } from "./LeseAnsicht"
 
 type Rahmenhilfe = "16:9" | "9:16" | null
@@ -178,6 +181,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
   const [fehler, setFehler] = useState("")
   const [auswahl, setAuswahl] = useState<number | null>(null)
   const [fadenDialog, setFadenDialog] = useState<FadenDialog | null>(null)
+  const [regelnOffen, setRegelnOffen] = useState(false)
   const [befehl, setBefehl] = useState(false)
   const [aufnahme, setAufnahme] = useState(!!render)
   const [rahmenhilfe, setRahmenhilfe] = useState<Rahmenhilfe>(null)
@@ -927,7 +931,8 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
     return () => window.removeEventListener("keydown", taste)
   }, [aufnahme, nurLesen, schritt, beweisAnsicht, hinauf, knoten, eintauchen])
 
-  const offeneFaeden = wand?.faeden.filter((f) => f.befunde.length).length ?? 0
+  // Nur sperrende, nicht überstimmte Befunde halten einen Faden aus der Lese-Ansicht; Hinweise beraten nur.
+  const offeneFaeden = wand?.faeden.filter((f) => f.befunde.some(sperrt)).length ?? 0
 
   if (fehler) {
     return (
@@ -1019,6 +1024,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
           gelenke={wand.gelenke ?? []}
           gelenkeHolen={gelenkeHolen}
           offeneFaeden={offeneFaeden}
+          regeln={() => setRegelnOffen(true)}
           karte={() => setBefehl(true)}
           zettel={zettelNeu}
           rahmen={rahmenNeu}
@@ -1183,10 +1189,12 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
       )}
 
       {befehl && <Befehlszeile schliessen={() => setBefehl(false)} gewaehlt={(e) => karteHolen(e)} />}
+      {regelnOffen && <RegelnDialog slug={slug} schliessen={() => setRegelnOffen(false)} geaendert={() => laden()} />}
 
       {fadenDialog && (
         <FadenFormular
           {...fadenDialog}
+          board={slug}
           fertig={(v) => { setFadenDialog(null); if (v) laden() }}
         />
       )}
@@ -1218,6 +1226,7 @@ function Werkzeugleiste(p: {
   gelenke: EntitaetKurz[]
   gelenkeHolen: () => void
   offeneFaeden: number
+  regeln: () => void
   karte: () => void
   zettel: (art: Zettel["art"]) => void
   rahmen: (titel: string) => void
@@ -1303,10 +1312,15 @@ function Werkzeugleiste(p: {
           </button>
         </>
       )}
+      <button type="button" className={knopf} onClick={p.regeln} title="Prüfregeln dieses Boards und deine Schlüssel">
+        <ShieldCheck className="h-4 w-4" aria-hidden /> Regeln
+      </button>
       {p.offeneFaeden > 0 && (
-        <span className="ml-1 rounded-full bg-[#FFB300]/15 px-3 py-1 text-xs text-[#FFB300]" title="Diese Fäden bestehen die Veröffentlichungs-Prüfung noch nicht">
-          {p.offeneFaeden} {p.offeneFaeden === 1 ? "Faden" : "Fäden"} nicht veröffentlichbar
-        </span>
+        <button type="button" onClick={p.regeln}
+          className="ml-1 rounded-full bg-[#FFB300]/15 px-3 py-1 text-xs text-[#FFB300] hover:bg-[#FFB300]/25"
+          title="Diese Fäden haben einen sperrenden Befund. Überstimmen geht bei der Freigabe mit Begründung.">
+          {p.offeneFaeden} {p.offeneFaeden === 1 ? "Faden" : "Fäden"} gesperrt
+        </button>
       )}
     </div>
   )

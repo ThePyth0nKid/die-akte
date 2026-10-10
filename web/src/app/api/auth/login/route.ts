@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { djangoFetch } from "@/lib/server-api"
 import { accessTokenCookie, refreshTokenCookie } from "@/lib/cookie-config"
+import { gleicheHerkunft } from "@/lib/herkunft"
 
 export async function POST(request: NextRequest) {
+  if (!gleicheHerkunft(request.method, (n) => request.headers.get(n))) {
+    return NextResponse.json({ detail: "Anfrage von fremder Herkunft abgelehnt." }, { status: 403 })
+  }
   const body = await request.json()
   const { login, password } = body
 

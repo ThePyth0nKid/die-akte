@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { djangoFetch } from "@/lib/server-api"
 import { accessTokenCookie, refreshTokenCookie } from "@/lib/cookie-config"
+import { gleicheHerkunft } from "@/lib/herkunft"
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  if (!gleicheHerkunft(request.method, (n) => request.headers.get(n))) {
+    return NextResponse.json({ detail: "Anfrage von fremder Herkunft abgelehnt." }, { status: 403 })
+  }
   const cookieStore = await cookies()
-  const cookieDomain = process.env.COOKIE_DOMAIN || undefined
   const refreshToken = cookieStore.get("refresh_token")?.value
 
   if (!refreshToken) {
@@ -18,8 +21,7 @@ export async function POST() {
   })
 
   if (!res.ok) {
-    cookieStore.delete({ name: "access_token", domain: cookieDomain, path: "/" })
-    cookieStore.delete({ name: "refresh_token", domain: cookieDomain, path: "/" })
+    // Cookies bleiben (siehe Proxy): Eine parallele Erneuerung kann gerade frische gesetzt haben.
     return NextResponse.json({ error: "Refresh failed" }, { status: 401 })
   }
 

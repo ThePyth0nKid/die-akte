@@ -89,9 +89,34 @@ export interface Beleg {
   fundstelle: string
 }
 
+export type Stufe = "aus" | "hinweis" | "sperrt"
+
 export interface Befund {
   code: string
   text: string
+  /** Stufe der Regel auf diesem Board; nur „sperrt“ hält einen Faden aus der Lese-Ansicht. */
+  schwere?: Stufe
+  /** Ein Mensch hat den Befund bei der Freigabe mit Begründung überstimmt. */
+  ueberstimmt?: boolean
+}
+
+/** Eine Prüfregel mit ihrer Stufe auf diesem Board (GET /boards/<slug>/pruefung/). */
+export interface Regel {
+  code: string
+  text: string
+  stufe: Stufe
+  standard: Stufe
+}
+
+export interface Pruefung {
+  faeden: { id: number; titel: string; ok: boolean; befunde: Befund[] }[]
+  alle_ok: boolean
+  regeln: Regel[]
+}
+
+/** Hält dieser Befund den Faden aus der Lese-Ansicht? */
+export function sperrt(b: Befund): boolean {
+  return (b.schwere ?? "sperrt") === "sperrt" && !b.ueberstimmt
 }
 
 export interface Verbindung {
@@ -124,6 +149,8 @@ export interface Board {
   beschreibung: string
   look: "dunkel" | "papier"
   oeffentlich?: boolean
+  /** Stufen der Prüfregeln für dieses Board (leer = Standard). */
+  regeln?: Record<string, Stufe>
   /** false = Mitglied, nur Lesen. */
   darf_bearbeiten?: boolean
   /** Slugs der Wände, auf denen dieses Board als Mappe liegt (der Baum der Akte). */

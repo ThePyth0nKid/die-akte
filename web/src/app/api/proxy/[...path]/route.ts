@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { DJANGO_API_URL } from "@/lib/server-api"
 import { accessTokenCookie, refreshTokenCookie } from "@/lib/cookie-config"
+import { gleicheHerkunft } from "@/lib/herkunft"
 
-const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined
+const FREMD = { detail: "Anfrage von fremder Herkunft abgelehnt." }
 
 async function proxyRequest(request: NextRequest) {
+  if (!gleicheHerkunft(request.method, (n) => request.headers.get(n))) {
+    return NextResponse.json(FREMD, { status: 403 })
+  }
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
 
@@ -57,8 +61,9 @@ async function proxyRequest(request: NextRequest) {
     })
 
     if (!refreshRes.ok) {
-      cookieStore.delete({ name: "access_token", domain: COOKIE_DOMAIN, path: "/" })
-      cookieStore.delete({ name: "refresh_token", domain: COOKIE_DOMAIN, path: "/" })
+      // Cookies nicht löschen: Laufen mehrere Anfragen gleichzeitig ab, erneuert die erste, und die übrigen
+      // scheitern am schon verbrauchten Refresh-Token (Rotation mit Sperrliste). Löschten sie die Cookies, wäre
+      // die frische Sitzung der ersten gleich wieder weg. Der Browser versucht es mit den neuen Cookies erneut.
       return NextResponse.json({ error: "Session expired" }, { status: 401 })
     }
 
