@@ -1,0 +1,92 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        datenbank: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: akte
+          POSTGRES_PASSWORD: nur-fuer-die-ci
+          POSTGRES_DB: akte
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U akte" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      AKTE_DATEN: ${{ runner.temp }}/akte-daten
+      DATABASE_URL: ${{ matrix.datenbank == 'postgres' && 'postgres://akte:nur-fuer-die-ci@localhost:5432/akte' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt -r backend/requirements-browser.txt ./beweis
+      - run: python -m playwright install --with-deps chromium
+      - name: Migrationen vollständig
+        working-directory: backend
+        run: DJANGO_DEBUG=1 python manage.py makemigrations --check --dry-run
+      - name: Tests
+        working-directory: backend
+        run: python manage.py test
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: npm run build
+
+  mcp-und-beweis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -r backend/requirements.txt -e ./beweis[test] -e ./mcp[test]
+      - name: Atlas-Prüfer für die Kreuzprüfung
+        working-directory: beweis/kreuzpruefung
+        run: npm ci
+      - name: Beweis (Atlas-Pins, Kreuzprüfung)
+        working-directory: beweis
+        run: pytest -q
+      - name: MCP (mit echtem Backend)
+        working-directory: mcp
+        env:
+          AKTE_BACKEND_PYTHON: python
+        run: pytest -q
+
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --check render/render_fahrt.cjs && node --check render/render_dienst.cjs
+      - run: python -m py_compile render/aufnahme.py render/vertonen.py render/mischen.py werkzeuge/fotos_suchen.py

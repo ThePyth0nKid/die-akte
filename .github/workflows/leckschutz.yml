@@ -1,0 +1,37 @@
+name: Leckschutz
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  geheimnisse-und-sperrliste:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks über die ganze Historie
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo --redact --no-banner
+      - name: Sperrliste über Arbeitsbaum und Historie
+        env:
+          # Private Regeln kommen aus einem Secret; in Forks gibt es das nicht, dann gelten nur die öffentlichen.
+          OSS_SCRUB_SPERRLISTE_INHALT: ${{ secrets.OSS_SCRUB_SPERRLISTE_INHALT }}
+        run: |
+          python werkzeuge/scrub/pruefen.py --alle
+          python werkzeuge/scrub/pruefen.py --historie
+
+  lizenzen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install reuse
+      - run: reuse lint

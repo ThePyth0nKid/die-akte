@@ -1,4 +1,5 @@
-# Öffentliche Regeln für werkzeuge/scrub/pruefen.py (SPDX-License-Identifier: MIT)
+# Öffentliche Regeln für werkzeuge/scrub/pruefen.py
+# SPDX-License-Identifier: MIT
 # Eine Regex je Zeile, Groß-/Kleinschreibung egal; "CS:" = mit Groß-/Kleinschreibung.
 # Platzhalter wie C:\Users\<name>\ sind erlaubt (das "<" nach dem Pfadtrenner).
 

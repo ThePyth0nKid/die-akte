@@ -18,12 +18,15 @@ dependencies = [
 
 [project.optional-dependencies]
 # Signaturen prüfen (akte pruefe-signaturen): das Paket akte-beweis aus demselben Repo.
-beweis = ["akte-beweis"]
+beweis = ["akte-beweis @ git+https://github.com/ThePyth0nKid/die-akte#subdirectory=beweis"]
 test = ["pytest>=8", "responses>=0.25"]
 
 [project.scripts]
 akte = "akte_client.cli:main"
 akte-mcp = "akte_mcp.server:main"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/akte_client", "src/akte_mcp"]
