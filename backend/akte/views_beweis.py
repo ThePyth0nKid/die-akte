@@ -1,8 +1,9 @@
-"""API der Beweisschicht: Schlüssel, Freigabe mit Unterschrift, Export der Kette.
+"""API der Beweisschicht: Schlüssel, Freigabe und Widerruf mit Unterschrift, Export der Kette.
 
-Schlüssel anmelden und Freigaben unterschreiben geht nur mit Passwort-Anmeldung (Mensch in der Oberfläche),
-nie mit einem Werkzeug-Token. Den Export lesen Redaktion und, wenn die Akte öffentlich ist, auch Besucher; Besucher
-bekommen die Offenlegung nur für Objekte, die öffentlich sichtbar sind.
+Schlüssel anmelden, Freigaben und Widerrufe unterschreiben geht nur mit Passwort-Anmeldung (Mensch in der
+Oberfläche), nie mit einem Werkzeug-Token. Den Export lesen Redaktion und, wenn die Akte öffentlich ist, auch Besucher;
+Besucher bekommen die Offenlegung nur für die jüngste Freigabe von Objekten, die öffentlich sichtbar sind, und für die
+Sicherungen ihrer Quellen.
 """
 
 from __future__ import annotations
@@ -11,17 +12,18 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from . import beweisschicht
-from .beweisschicht import BeweisFehler
+from . import beweisschicht, lesecache
+from .beweisschicht import BeweisFehler, freigaben_prefetch, letzte_freigabe, veraendert_seit_freigabe
 from .menschenrecht import per_werkzeug
-from .models import Board, Entitaet, Ereignis, Schluessel, SchluesselRolle, Verbindung
+from .models import Board, BoardKarte, Entitaet, Ereignis, Schluessel, SchluesselRolle, Status
 from .permissions import ist_redaktion
-from .pruefung import darf_oeffentlich
+from .pruefung import darf_oeffentlich, faeden_qs
 
 
 def _nur_mensch(request):
@@ -43,8 +45,6 @@ class _Mensch(APIView):
     def initial(self, request, *args, **kwargs):
         super().initial(request, *args, **kwargs)
         if not getattr(settings, "AKTE_BEWEISSCHICHT", True):
-            from rest_framework.exceptions import NotFound
-
             raise NotFound("Die Beweisschicht ist ausgeschaltet.")
 
 
@@ -54,8 +54,8 @@ class SchluesselView(_Mensch):
         if sperre:
             return sperre
         eigene = Schluessel.objects.filter(nutzer=request.user, rolle=SchluesselRolle.MENSCH).order_by("-erstellt_am")
-        return Response([{"kid": s.kid, "fingerabdruck": s.fingerabdruck, "erstellt_am": s.erstellt_am,
-                          "widerrufen_am": s.widerrufen_am} for s in eigene])
+        return Response([{"kid": s.kid, "fingerabdruck": s.fingerabdruck, "oeffentlich": s.oeffentlich,
+                          "erstellt_am": s.erstellt_am, "widerrufen_am": s.widerrufen_am} for s in eigene])
 
     def post(self, request):
         sperre = _nur_mensch(request)
@@ -72,14 +72,16 @@ class SchluesselView(_Mensch):
 
 def _objekt(art: str, pk: int):
     if art == "faden":
-        return get_object_or_404(Verbindung.objects.select_related("von", "nach").prefetch_related(
-            "belege__quelle__sicherungen", "ueberstimmungen"), pk=pk)
+        return get_object_or_404(faeden_qs(), pk=pk)
     if art == "karte":
-        return get_object_or_404(Entitaet, pk=pk)
+        return get_object_or_404(Entitaet.objects.prefetch_related(freigaben_prefetch()), pk=pk)
     raise BeweisFehler("objekt ist „karte“ oder „faden“.")
 
 
 class FreigabeVorbereitenView(_Mensch):
+    """``{"objekt": "faden"|"karte", "id": …, "kid": …, "ueberstimmungen": {code: Begründung}, "board": slug?}``.
+    Mit ``board`` gelten dessen Prüfregeln (etwa eine strengere Stufe), sonst die allgemeinen."""
+
     def post(self, request):
         sperre = _nur_mensch(request)
         if sperre:
@@ -91,8 +93,9 @@ class FreigabeVorbereitenView(_Mensch):
             ueber = d.get("ueberstimmungen") or {}
             if not isinstance(ueber, dict):
                 raise BeweisFehler("ueberstimmungen ist ein Objekt {code: Begründung}.")
-            return Response(beweisschicht.freigabe_vorbereiten(request.user, objekt, art, str(d.get("kid", "")),
-                                                               {str(k): str(v) for k, v in ueber.items()}))
+            board = get_object_or_404(Board, slug=str(d["board"])) if d.get("board") else None
+            return Response(beweisschicht.freigabe_vorbereiten(
+                request.user, objekt, art, str(d.get("kid", "")), {str(k): str(v) for k, v in ueber.items()}, board))
         except BeweisFehler as f:
             return _fehler(f)
         except (TypeError, ValueError):
@@ -114,8 +117,38 @@ class FreigabeAbschliessenView(_Mensch):
         return Response({"event_id": e.event_id, "event_hash": e.event_hash, "position": e.position}, status=201)
 
 
+class WiderrufVorbereitenView(_Mensch):
+    """``{"kid": <zu widerrufen>, "mit": <eigener gültiger Schlüssel, der unterschreibt>}``."""
+
+    def post(self, request):
+        sperre = _nur_mensch(request)
+        if sperre:
+            return sperre
+        kid = str(request.data.get("kid", ""))
+        try:
+            return Response(beweisschicht.widerruf_vorbereiten(request.user, kid, str(request.data.get("mit") or kid)))
+        except BeweisFehler as f:
+            return _fehler(f)
+
+
+class WiderrufAbschliessenView(_Mensch):
+    def post(self, request):
+        sperre = _nur_mensch(request)
+        if sperre:
+            return sperre
+        try:
+            e = beweisschicht.widerruf_abschliessen(request.user, str(request.data.get("event_id", "")),
+                                                    str(request.data.get("signatur", "")))
+        except BeweisFehler as f:
+            return _fehler(f)
+        except ValueError as f:
+            return Response({"detail": f"Unterschrift unlesbar: {f}"}, status=400)
+        return Response({"event_id": e.event_id, "event_hash": e.event_hash, "position": e.position}, status=201)
+
+
 class ExportView(APIView):
-    """Die ganze Kette mit Schlüsselbündel. Offenlegung: Redaktion alles, Besucher nur Öffentliches."""
+    """Die ganze Kette mit Schlüsselbündel. Offenlegung: Redaktion alles, Besucher nur Öffentliches (fünf Minuten im
+    Cache, jede Änderung macht ihn ungültig)."""
 
     authentication_classes = [JWTAuthentication, TokenAuthentication]
     permission_classes = [AllowAny]
@@ -127,32 +160,49 @@ class ExportView(APIView):
             return Response(beweisschicht.export())
         if not getattr(settings, "AKTE_OEFFENTLICH_AKTIV", False):
             return Response({"detail": "Nicht öffentlich."}, status=403)
-        return Response(beweisschicht.export(_oeffentlich_offenlegbar()))
+        return Response(lesecache.holen("beweis:export", set(),
+                                        lambda: beweisschicht.export(_oeffentlich_offenlegbar())))
 
 
 def _oeffentlich_offenlegbar():
-    """Welche Ereignisse Besucher offengelegt bekommen: Fäden und Karten, die öffentlich sichtbar sind, und die
-    Sicherungen ihrer Quellen. Nie Inhalte mit dem vollen Namen einer Privatperson (die Zusage bleibt verdeckt)."""
-    boards = list(Board.objects.filter(oeffentlich=True).prefetch_related("karten"))
-    auf_board = {b.pk: {k.entitaet_id for k in b.karten.all()} for b in boards}
-    faeden, karten, quellen = set(), set(), set()
-    for e in Ereignis.objects.filter(typ="akte.freigabe").select_related("verbindung__von", "verbindung__nach",
-                                                                          "entitaet"):
-        if e.verbindung_id:
-            v = e.verbindung
-            if v.von.ist_privatperson or v.nach.ist_privatperson:
-                continue
-            if any(v.von_id in auf_board[b.pk] and v.nach_id in auf_board[b.pk] and darf_oeffentlich(v, b)
-                   for b in boards):
-                faeden.add(e.pk)
-                quellen.update(v.belege.values_list("quelle_id", flat=True))
-        elif e.entitaet_id and not e.entitaet.ist_privatperson:
-            if any(e.entitaet_id in ids for ids in auf_board.values()):
-                karten.add(e.pk)
+    """Welche Ereignisse Besucher offengelegt bekommen.
 
-    def offenlegen(e: Ereignis) -> bool:
-        if e.pk in faeden or e.pk in karten:
-            return True
-        return e.typ == "akte.sicherung" and e.sicherung_id is not None and e.sicherung.quelle_id in quellen
+    Je Objekt nur die jüngste Freigabe (frühere Fassungen, etwa vor einer Korrektur, bleiben verdeckt), und nur für
+    Fäden und Karten, die auf einem öffentlichen Board sichtbar sind: freigegeben, unverändert, Faden besteht die
+    Prüfung des Boards und ist dort nicht ausgeblendet. Dazu die Sicherungen ihrer Quellen. Nie Inhalte mit dem
+    vollen Namen einer Privatperson (deren Zusage bleibt verdeckt).
+    """
+    boards = list(Board.objects.filter(oeffentlich=True).prefetch_related("ausgeblendete_verbindungen"))
+    auf_board: dict[int, set[int]] = {b.pk: set() for b in boards}
+    for board_id, entitaet_id in BoardKarte.objects.filter(board__in=boards).values_list("board_id", "entitaet_id"):
+        auf_board[board_id].add(entitaet_id)
+    alle = set().union(*auf_board.values()) if auf_board else set()
+    offen: set[int] = set()
+    quellen: set[int] = set()
 
-    return offenlegen
+    karten = Entitaet.objects.filter(pk__in=alle, status=Status.FREIGEGEBEN).prefetch_related(freigaben_prefetch())
+    for e in karten:
+        if e.ist_privatperson or veraendert_seit_freigabe(e, "karte"):
+            continue
+        letzte = letzte_freigabe(e)
+        if letzte is not None:
+            offen.add(letzte.pk)
+
+    faeden = faeden_qs().filter(status=Status.FREIGEGEBEN, von_id__in=alle, nach_id__in=alle)
+    for v in faeden:
+        if v.von.ist_privatperson or v.nach.ist_privatperson:
+            continue
+        sichtbar = any(
+            v.von_id in auf_board[b.pk] and v.nach_id in auf_board[b.pk]
+            and v.pk not in {x.pk for x in b.ausgeblendete_verbindungen.all()} and darf_oeffentlich(v, b)
+            for b in boards
+        )
+        letzte = letzte_freigabe(v) if sichtbar else None
+        if letzte is not None:
+            offen.add(letzte.pk)
+            quellen.update(b.quelle_id for b in v.belege.all())
+
+    offen.update(Ereignis.objects.filter(typ="akte.sicherung", sicherung__quelle_id__in=quellen)
+                 .values_list("pk", flat=True))
+    return lambda ereignis: ereignis.pk in offen
+

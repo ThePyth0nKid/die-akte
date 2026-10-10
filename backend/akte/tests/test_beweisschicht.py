@@ -148,7 +148,8 @@ class BeweisschichtTest(TestCase):
             BoardKarte.objects.create(board=board, entitaet=e)
         export = APIClient().get(f"{B}/export/").json()
         self.assertEqual(len(export["trace"]["events"]), 4)
-        offen = {e["inhalt"].get("name") or e["inhalt"].get("beschreibung") for e in export["offenlegung"].values()}
+        offen = {e["inhalt"]["inhalt"].get("name") or e["inhalt"]["inhalt"].get("beschreibung")
+                 for e in export["offenlegung"].values()}
         self.assertEqual(offen, {"Senat Musterhafen", "Nordlicht Analytik GmbH", "beauftragt"})
         self.assertTrue(pruefen(export["trace"], export["offenlegung"]).gueltig)
 

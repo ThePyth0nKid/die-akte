@@ -42,14 +42,23 @@ def unabhaengige_quellen(verbindung: Verbindung) -> int:
     return len(herkuenfte)
 
 
+def faeden_qs():
+    """Fäden mit allem, was die Prüfung braucht, in einer festen Zahl von Abfragen (auch Freigaben beider Enden)."""
+    from .beweisschicht import freigaben_prefetch
+
+    return Verbindung.objects.select_related("von", "nach").prefetch_related(
+        "belege__quelle__sicherungen__beleg", "ueberstimmungen", freigaben_prefetch(),
+        freigaben_prefetch("von__ereignisse"), freigaben_prefetch("nach__ereignisse"),
+    )
+
+
 def pruefe_verbindung(v: Verbindung, board=None, *, ohne_zustand: bool = False) -> list[Befund]:
     """Alle Befunde eines Fadens mit ihrer Stufe (Standard, ``AKTE_REGELN``, ``Board.regeln``).
 
     Öffentlich darf ein Faden, wenn kein Befund sperrt (``darf_oeffentlich``). ``ohne_zustand`` lässt die
     Zustandsregeln weg (für die Freigabe selbst, die genau diesen Zustand herstellt).
 
-    Erwartet ``select_related("von", "nach")`` und ``prefetch_related("belege__quelle")``
-    (siehe ``views._faeden_qs``), sonst kostet jeder Faden drei Abfragen.
+    Erwartet die Vorabfragen aus ``faeden_qs``, sonst kostet jeder Faden mehrere Abfragen.
     Regel 2 (Aussageart) und 5 (Güte ★/☆) erzwingt das Modell selbst: beide Felder
     sind Pflicht mit festen Werten.
     """
@@ -130,6 +139,8 @@ def _roh_befunde(v: Verbindung, ohne_zustand: bool) -> list[Befund]:
     for e in (v.von, v.nach):
         if e.status != Status.FREIGEGEBEN:
             befunde.append(Befund("karte_nicht_freigegeben", f"„{e.name}“ ist nicht freigegeben."))
+        elif veraendert_seit_freigabe(e, "karte"):
+            befunde.append(Befund("veraendert_seit_freigabe", f"„{e.name}“ seit der Freigabe verändert."))
 
     return befunde
 

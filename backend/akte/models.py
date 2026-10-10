@@ -339,7 +339,7 @@ class SicherungArt(models.TextChoices):
     SEITE_PDF = "seite_pdf", "Seite als PDF"
     FUNDSTELLE = "fundstelle", "Fundstelle markiert"
     ARCHIVE_ORG = "archive_org", "archive.org"
-    VIDEO_LOKAL = "video_lokal", "Video im ARCHIV (D:)"
+    VIDEO_LOKAL = "video_lokal", "Video im lokalen Archiv"
     ANHANG = "anhang", "Anhang"
 
 
@@ -367,7 +367,7 @@ class Sicherung(models.Model):
     bytes = models.PositiveBigIntegerField(default=0)
     mime = models.CharField(max_length=100, blank=True)
     dateiname = models.CharField(max_length=200, blank=True)
-    #: Fremde Kopie (archive.org) oder lokaler Pfad (Video auf D:).
+    #: Fremde Kopie (archive.org) oder lokaler Pfad (Video im lokalen Archiv).
     fremd_url = models.CharField(max_length=1000, blank=True)
     abgerufen_von = models.URLField(max_length=1000, blank=True, help_text="Adresse nach Weiterleitungen")
     gesichert_am = models.DateTimeField(null=True, blank=True)
@@ -448,6 +448,8 @@ class Ereignis(models.Model):
                                    related_name="ereignisse")
     sicherung = models.ForeignKey(Sicherung, on_delete=models.SET_NULL, null=True, blank=True,
                                   related_name="ereignisse")
+    #: Salz und Inhalt gelöscht (``akte_schwaerzen``); die Zusage in der Kette bleibt, offenlegen geht nicht mehr.
+    geschwaerzt_am = models.DateTimeField(null=True, blank=True)
     erstellt_am = models.DateTimeField(auto_now_add=True)
 
     class Meta:

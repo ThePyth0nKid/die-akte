@@ -1,10 +1,12 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APIClient
 
 
 class LoginTests(TestCase):
     def setUp(self):
+        cache.clear()  # die Drossel je Konto zählt sonst über Tests hinweg
         self.nutzer = get_user_model().objects.create_user("redaktion", "redaktion@example.org", "lang-genug-123")
         self.client = APIClient()
 

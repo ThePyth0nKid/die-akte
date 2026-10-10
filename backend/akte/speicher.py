@@ -13,6 +13,10 @@ Schlüssel sind inhaltsadressiert (``beweise/<sha256>.<endung>``): dieselbe Date
 liegt nur einmal da, jede Sicherung ist von selbst wiederholbar.
 """
 
+import hashlib
+import os
+import re
+import secrets
 from pathlib import Path
 
 import boto3
@@ -23,6 +27,10 @@ NAMENSRAUM = "beweise/"
 
 class SpeicherFehlt(Exception):
     pass
+
+
+class KopieBeschaedigt(Exception):
+    """Die gespeicherte Kopie passt nicht mehr zu ihrer Prüfsumme (Datenträgerfehler oder Eingriff)."""
 
 
 def _r2_eingerichtet() -> bool:
@@ -73,15 +81,37 @@ def ablegen(schl: str, daten: bytes, mime: str) -> None:
         raise SpeicherFehlt("Kein Beweis-Speicher eingerichtet (AKTE_R2_BUCKET).")
     ziel = ordner / schl
     ziel.parent.mkdir(parents=True, exist_ok=True)
-    if not ziel.exists():
-        ziel.write_bytes(daten)
+    if ziel.exists():
+        return
+    # Erst vollständig in eine Nachbardatei, dann umbenennen: nie eine halbe Kopie unter dem endgültigen Namen.
+    tmp = ziel.with_name(f".{ziel.name}.{secrets.token_hex(6)}.neu")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(daten)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, ziel)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _erwartet(schl: str) -> str:
+    """Die Schlüssel sind inhaltsadressiert: ``beweise/<sha256>.<endung>``."""
+    treffer = re.fullmatch(r"([0-9a-f]{64})\.[A-Za-z0-9]+", schl[len(NAMENSRAUM):])
+    return treffer.group(1) if treffer else ""
 
 
 def lesen(schl: str) -> bytes:
+    """Kopie lesen und gegen ihre Prüfsumme halten; eine veränderte Kopie wird nie ausgeliefert."""
     _pruefe(schl)
     if _r2_eingerichtet():
-        return _client().get_object(Bucket=settings.AKTE_R2_BUCKET, Key=schl)["Body"].read()
-    ordner = _lokaler_ordner()
-    if ordner is None:
-        raise SpeicherFehlt("Kein Beweis-Speicher eingerichtet (AKTE_R2_BUCKET).")
-    return (ordner / schl).read_bytes()
+        daten = _client().get_object(Bucket=settings.AKTE_R2_BUCKET, Key=schl)["Body"].read()
+    else:
+        ordner = _lokaler_ordner()
+        if ordner is None:
+            raise SpeicherFehlt("Kein Beweis-Speicher eingerichtet (AKTE_R2_BUCKET).")
+        daten = (ordner / schl).read_bytes()
+    erwartet = _erwartet(schl)
+    if erwartet and hashlib.sha256(daten).hexdigest() != erwartet:
+        raise KopieBeschaedigt(f"Die Kopie {schl} passt nicht mehr zu ihrer Prüfsumme.")
+    return daten

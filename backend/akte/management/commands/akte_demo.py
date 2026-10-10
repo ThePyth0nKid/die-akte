@@ -11,6 +11,9 @@ erzeugt; deshalb funktionieren Beweissicherung und Fundstellen ohne Internet. Ab
 * ein Faden zu einer Privatperson über Familie (sperrt, bis ein Mensch mit Begründung überstimmt),
 * signierte Freigaben mit einem Demo-Schlüssel, damit ``akte pruefe-signaturen`` sofort etwas zu prüfen hat.
 
+Demo-Objekte tragen die Markierung ``akte-demo`` (Karten im Feld ``tags``, Quellen in ``notiz``). ``--neu`` löscht nur
+markierte Objekte, nie gleichnamige eigene.
+
 Der Befehl arbeitet über die eigene API (im selben Prozess) – so gelten dieselben Prüfungen wie in der Oberfläche.
 Der private Demo-Schlüssel wird nach dem Lauf verworfen.
 """
@@ -31,6 +34,7 @@ from akte.models import Board, Entitaet, Quelle
 from akte.permissions import REDAKTION_GRUPPE
 
 SLUG = "demo-musterhafen"
+MARKE = "akte-demo"
 A = "/api/v1/akte"
 
 KARTEN = [
@@ -125,8 +129,9 @@ class Command(BaseCommand):
             if not opts["neu"]:
                 raise CommandError(f"Board {SLUG} gibt es schon. Mit --neu neu anlegen.")
             Board.objects.filter(slug=SLUG).delete()
-            Entitaet.objects.filter(name__in=[k[1] for k in KARTEN]).delete()
-            Quelle.objects.filter(titel__in=[q[0] for q in QUELLEN.values()]).delete()
+            demo = [e.pk for e in Entitaet.objects.filter(name__in=[k[1] for k in KARTEN]) if MARKE in (e.tags or [])]
+            Entitaet.objects.filter(pk__in=demo).delete()
+            Quelle.objects.filter(titel__in=[q[0] for q in QUELLEN.values()], notiz=MARKE).delete()
 
         konto, _ = get_user_model().objects.get_or_create(username=opts["benutzer"])
         konto.groups.add(Group.objects.get_or_create(name=REDAKTION_GRUPPE)[0])
@@ -145,14 +150,15 @@ class Command(BaseCommand):
             karten = {}
             for i, (schl, name, typ, kurz, oeffentlich) in enumerate(KARTEN):
                 e = ok(api.post(f"{A}/entitaeten/", {"name": name, "typ": typ, "kurzbeschreibung": kurz,
-                                                     "oeffentliche_person": oeffentlich}, format="json"))
+                                                     "oeffentliche_person": oeffentlich, "tags": [MARKE]},
+                                format="json"))
                 karten[schl] = e
                 ok(api.post(f"{A}/boards/{SLUG}/karten/", {"entitaet": e["id"], "x": (i % 4) * 400, "y": (i // 4) * 500},
                             format="json"))
             quellen = {}
             for schl, (titel, herausgeber, guete, seiten) in QUELLEN.items():
                 q = ok(api.post(f"{A}/quellen/", {"titel": titel, "herausgeber": herausgeber, "guete": guete,
-                                                  "abgerufen_am": "2026-10-01"}, format="json"))
+                                                  "abgerufen_am": "2026-10-01", "notiz": MARKE}, format="json"))
                 datei = SimpleUploadedFile(f"{schl}.pdf", pdf(seiten, titel=titel), content_type="application/pdf")
                 ok(api.post(f"{A}/quellen/{q['id']}/anhang/", {"datei": datei}, format="multipart"))
                 quellen[schl] = q
@@ -193,9 +199,9 @@ class Command(BaseCommand):
                 ok(api.post(f"{A}/beweis/freigabe/abschliessen/", {"event_id": vor["event_id"],
                                                                    "signatur": b64url(sig)}, format="json"))
 
+            # Alle Karten freigeben, auch die Privatperson: Besucher sehen sie dann mit Initialen.
             for schl, *_ in KARTEN:
-                if schl != "thea":
-                    freigeben("karte", karten[schl]["id"])
+                freigeben("karte", karten[schl]["id"])
             for v, frei in faeden:
                 if frei:
                     freigeben("faden", v["id"])

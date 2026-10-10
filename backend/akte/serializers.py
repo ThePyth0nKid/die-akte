@@ -20,6 +20,7 @@ from .models import (
     Station,
     Verbindung,
     Zettel,
+    ZettelArt,
 )
 from .pruefung import pruefe_verbindung
 
@@ -245,6 +246,23 @@ class ZettelSerializer(serializers.ModelSerializer):
     class Meta:
         model = Zettel
         fields = ["id", "art", "text", "x", "y"]
+
+    def validate(self, daten):
+        """Meinungs-Zettel stehen in der Lese-Ansicht. Privatpersonen auf diesem Board erscheinen dort nur mit
+        Initialen, also darf ihr voller Name auch nicht im Zettel stehen."""
+        art = daten.get("art", getattr(self.instance, "art", ZettelArt.NOTIZ))
+        text = daten.get("text", getattr(self.instance, "text", ""))
+        view = self.context.get("view")
+        slug = getattr(view, "kwargs", {}).get("slug") if view is not None else None
+        if art == ZettelArt.MEINUNG and slug and text:
+            privat = Entitaet.objects.filter(karten__board__slug=slug, typ="person", oeffentliche_person=False)
+            klein = text.casefold()
+            treffer = sorted({n for n in privat.values_list("name", flat=True)
+                              if len(n.split()) > 1 and n.casefold() in klein})
+            if treffer:
+                raise serializers.ValidationError({"text": "Meinungs-Zettel sind öffentlich lesbar. Privatpersonen "
+                                                           "nur mit Initialen nennen: " + ", ".join(treffer)})
+        return daten
 
 
 def farbe_pruefen(wert):

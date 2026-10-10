@@ -310,17 +310,19 @@ class MitgliederTest(TestCase):
         self.verdacht = faden(self.mustermann, self.privat, [quelle()], aussageart=Aussageart.VERDACHT)
         self.zum_intern = faden(self.creator, self.mustermann, [quelle(titel="Reel", url="https://instagram.com/x")])
 
+    @override_settings(AKTE_LESEANSICHT="alles_belegte")
     def test_liest_freigeschaltetes_board(self):
         antwort = self.client.get("/api/v1/akte/boards/nordlicht/")
         self.assertEqual(antwort.status_code, 200)
         daten = antwort.json()
         self.assertFalse(daten["darf_bearbeiten"])
         namen = {k["entitaet"]: k["entitaet_detail"]["name"] for k in daten["karten"]}
-        self.assertEqual(set(namen.values()), {"Max Mustermann", "Nordlicht", "T. K."})
+        # Mustermann ist noch Entwurf: Ob er eine öffentliche Person ist, hat kein Mensch unterschrieben → Initialen.
+        self.assertEqual(set(namen.values()), {"M. M.", "Nordlicht", "T. K."})
         # Nur der belegte Faden, auch als Entwurf; kein Verdacht, kein Faden ohne Beleg, keiner zum anderen Board.
         self.assertEqual(len(daten["faeden"]), 1)
         f = daten["faeden"][0]
-        self.assertEqual((namen[f["von"]], namen[f["nach"]]), ("Max Mustermann", "Nordlicht"))
+        self.assertEqual((namen[f["von"]], namen[f["nach"]]), ("M. M.", "Nordlicht"))
         # Kennungen nur für diese Antwort (1..n), nicht die internen IDs.
         self.assertEqual(sorted(namen), [1, 2, 3])
         self.assertEqual(f["id"], 1)
@@ -329,9 +331,16 @@ class MitgliederTest(TestCase):
         self.assertEqual((daten["zettel"], daten["fahrten"], daten["beweise"]), ([], [], []))
         text = str(daten)
         for geheim in ("interne Notiz", "interne Vermutung", "Tom Klein", "Kleiner Creator", "instagram", "notiz_md",
-                       "erstellt_von", "stand': {"):
+                       "erstellt_von", "stand': {", "Max Mustermann"):
             self.assertNotIn(geheim, text)
         self.assertIn("T. K.", text)
+
+    def test_standard_zeigt_nur_gepruefte(self):
+        """Standard ``nur_gepruefte``: Entwürfe (Mustermann, der Faden zu ihm) erscheinen gar nicht."""
+        daten = self.client.get("/api/v1/akte/boards/nordlicht/").json()
+        self.assertEqual({k["entitaet_detail"]["name"] for k in daten["karten"]}, {"Nordlicht", "T. K."})
+        self.assertEqual(daten["faeden"], [])
+        self.assertNotIn("Mustermann", str(daten))
 
     def test_liste_zeigt_nur_freigeschaltete(self):
         daten = self.client.get("/api/v1/akte/boards/").json()

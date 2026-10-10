@@ -287,9 +287,11 @@ def bauen(akte: Akte) -> FastMCP:
             return _fehler(e)
 
     @mcp.tool(annotations=SCHREIBEN)
-    def zettel_anlegen(board: str, art: Literal["notiz", "frage", "meinung"], text: str) -> dict:
-        """Zettel auf die Wand: notiz und frage bleiben intern; meinung ist eine markierte Einschätzung der
-        Redaktion und kann öffentlich sichtbar werden – nur anlegen, wenn die Redaktion es so formuliert hat."""
+    def zettel_anlegen(board: str, art: Literal["notiz", "frage"], text: str) -> dict:
+        """Zettel auf ein Arbeits-Board: notiz und frage bleiben intern. Meinungs-Zettel (für Leser sichtbar)
+        schreibt nur ein Mensch in der Oberfläche; veröffentlichte Boards ändern Werkzeuge nicht."""
+        if art not in ("notiz", "frage"):
+            return {"fehler": True, "text": "Werkzeuge legen nur Notizen oder Fragen an."}
         try:
             return aktionen.zettel_anlegen(akte, [{"board": board, "art": art, "text": text}])
         except Exception as e:  # noqa: BLE001

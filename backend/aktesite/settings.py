@@ -7,6 +7,7 @@ lokal auf einem Rechner: SQLite, kein Redis, kein Celery-Dienst, Beweise in eine
 from __future__ import annotations
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -28,12 +29,18 @@ def _liste(name: str, standard: str = "", trenner: str = ",") -> list[str]:
 
 
 DEBUG = _schalter("DJANGO_DEBUG")
+# Testlauf (schneller Hash, keine Drosseln, Wegwerf-Schlüssel) nur, wenn wirklich ``manage.py test`` läuft.
+# Ein AKTE_TESTLAUF=1 in einer .env im Betrieb bleibt wirkungslos.
+TESTLAUF = os.environ.get("AKTE_TESTLAUF") == "1" and sys.argv[1:2] == ["test"]
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
-    if DEBUG or os.environ.get("AKTE_TESTLAUF") == "1":
+    if DEBUG or TESTLAUF:
         SECRET_KEY = "nur-fuer-entwicklung-und-tests-nicht-verwenden"
     else:
         raise RuntimeError("DJANGO_SECRET_KEY fehlt. Lege ihn in .env an (siehe .env.example).")
+elif not (DEBUG or TESTLAUF) and (len(SECRET_KEY) < 32 or len(set(SECRET_KEY)) < 10):
+    raise RuntimeError("DJANGO_SECRET_KEY ist zu schwach (mindestens 32 zufällige Zeichen). Erzeugen: "
+                       'python -c "import secrets; print(secrets.token_urlsafe(50))"')
 
 ALLOWED_HOSTS = _liste("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,api,[::1]")
 CSRF_TRUSTED_ORIGINS = _liste("DJANGO_CSRF_TRUSTED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080")
@@ -47,6 +54,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework.authtoken",
+    "rest_framework_simplejwt.token_blacklist",
     "konto",
     "akte",
 ]
@@ -134,16 +142,22 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.AnonRateThrottle"],
     "DEFAULT_THROTTLE_RATES": {
         "anon": os.environ.get("AKTE_DROSSEL_ANON", "60/min"),
-        "login": os.environ.get("AKTE_DROSSEL_LOGIN", "10/min"),
+        # Anmeldung: je Konto (Name) eng, je Absender weiter; hinter dem Web-Proxy teilen sich alle einen Absender.
+        "login": os.environ.get("AKTE_DROSSEL_LOGIN", "60/min"),
+        "login_konto": os.environ.get("AKTE_DROSSEL_LOGIN_KONTO", "10/min"),
         "akte_mitglied": os.environ.get("AKTE_DROSSEL_MITGLIED", "300/hour"),
         "akte_oeffentlich": os.environ.get("AKTE_DROSSEL_OEFFENTLICH", "120/min"),
     },
+    # Zahl der eigenen Proxys vor der API (für die IP in X-Forwarded-For bei den Drosseln).
+    "NUM_PROXIES": int(os.environ.get("AKTE_VERTRAUTE_PROXYS", "0")) or None,
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.environ.get("AKTE_JWT_MINUTEN", "30"))),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.environ.get("AKTE_JWT_REFRESH_TAGE", "14"))),
     "ROTATE_REFRESH_TOKENS": True,
+    # Ein benutzter oder abgemeldeter Refresh-Token gilt nie wieder (Sperrliste in der Datenbank).
+    "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
 }
 
@@ -173,6 +187,8 @@ _SPEICHER_DA = bool(AKTE_S3_BUCKET or AKTE_SPEICHER_LOKAL)
 AKTE_SICHERUNG_AKTIV = _schalter("AKTE_SICHERUNG_AKTIV", _SPEICHER_DA)
 # Seitenbild und Fundstellen in Webseiten brauchen Chromium (Playwright). PDFs gehen ohne.
 AKTE_BROWSER_AKTIV = _schalter("AKTE_BROWSER_AKTIV", False)
+# archive.org: Quellen dort zusätzlich hinterlegen lassen (die URL geht an archive.org). Aus = nur eigene Kopie.
+AKTE_ARCHIV_AKTIV = _schalter("AKTE_ARCHIV_AKTIV", True)
 # Optional: archive.org-Schlüssel "zugang:geheim" für die zuverlässige Save-Page-Now-API.
 AKTE_ARCHIVE_ORG_SCHLUESSEL = os.environ.get("AKTE_ARCHIVE_ORG_SCHLUESSEL", "")
 # O-Ton-Einspieler in Fahrten dürfen nur aus diesen Ordnern kommen (Trenner ";"). Leer = Funktion aus.
@@ -187,6 +203,9 @@ AKTE_BEWEISSCHICHT = _schalter("AKTE_BEWEISSCHICHT", True)
 AKTE_SIGNIERTE_FREIGABE = _schalter("AKTE_SIGNIERTE_FREIGABE", True)
 # Geräteschlüssel dieser Installation (Standard: daten/schluessel/geraet_ed25519.pem, Rechte 600).
 AKTE_GERAETESCHLUESSEL = os.environ.get("AKTE_GERAETESCHLUESSEL", "")
+# Was Mitglieder und Besucher sehen: "nur_gepruefte" (Standard) = nur, was ein Mensch freigegeben hat und die
+# Prüfung besteht; "alles_belegte" = jeder belegte Faden, auch Entwürfe (nur für geschlossene Runden).
+AKTE_LESEANSICHT = os.environ.get("AKTE_LESEANSICHT", "nur_gepruefte").strip() or "nur_gepruefte"
 # Stufen der Prüfregeln für alle Boards, z. B. {"quelle_ohne_archiv": "sperrt"} (akte/regeln.py).
 AKTE_REGELN = os.environ.get("AKTE_REGELN", "")
 
@@ -196,7 +215,7 @@ AKTE_CLIENT_IP_HEADER = os.environ.get("AKTE_CLIENT_IP_HEADER", "")
 AKTE_VERTRAUTE_PROXYS = int(os.environ.get("AKTE_VERTRAUTE_PROXYS", "0"))
 
 # ─── Testlauf: keine fremden Seiten, keine Drosseln, schneller Hash ───────────
-if os.environ.get("AKTE_TESTLAUF") == "1":
+if TESTLAUF:
     AKTE_SICHERUNG_AKTIV = False
     AKTE_BROWSER_AKTIV = False
     CELERY_TASK_ALWAYS_EAGER = True

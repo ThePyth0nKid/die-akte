@@ -1,8 +1,13 @@
 """Was nur ein Mensch darf.
 
 Werkzeuge und Agenten (Anmeldung mit DRF-Token, z. B. über die CLI oder den MCP-Server) arbeiten der Redaktion zu:
-Sie legen Entwürfe an und ändern Entwürfe. Freigeben, Freigegebenes ändern oder löschen und ein Board öffentlich
-schalten bleibt dem Menschen in der Oberfläche vorbehalten (Anmeldung mit Passwort, JWT im Cookie).
+Sie legen Entwürfe an und ändern Entwürfe. Dem Menschen in der Oberfläche (Anmeldung mit Passwort, JWT im Cookie)
+bleibt vorbehalten:
+
+* freigeben, Freigegebenes ändern oder löschen, Quellen freigegebener Fäden ändern,
+* ein Board öffentlich schalten, ein veröffentlichtes Board ändern (Karten, Zettel, Rahmen, Mappen), Boards löschen,
+* eine Person als öffentliche Person kennzeichnen (sonst erscheint sie nur mit Initialen),
+* Meinungs-Zettel schreiben (sie sind in der Lese-Ansicht sichtbar).
 
 Grund: Die Akte macht Aussagen über Personen. Die Maschine darf schnell recherchieren und vorschlagen, entscheiden
 und veröffentlichen tut ein Mensch, der dafür geradesteht.
@@ -11,11 +16,12 @@ und veröffentlichen tut ein Mensch, der dafür geradesteht.
 from __future__ import annotations
 
 from django.conf import settings
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import APIException, PermissionDenied
 
-from .models import Status
+from .models import Status, ZettelArt
 
 
 class Konflikt(APIException):
@@ -58,18 +64,33 @@ def pruefe_anlegen(request, modell, daten: dict) -> dict:
     return {"status": Status.ENTWURF} if _hat_status(modell) else {}
 
 
-def nach_aenderung(objekt) -> bool:
+def nach_aenderung(objekt) -> list:
     """Nach dem Speichern: Weicht ein freigegebenes Objekt vom unterschriebenen Inhalt ab, ist es wieder Entwurf.
-    Gibt True zurück, wenn der Status zurückgesetzt wurde."""
-    from .beweisschicht import veraendert_seit_freigabe
-    from .models import Entitaet, Verbindung
 
+    Das gilt auch für Fäden, die davon abhängen: Eine umbenannte Karte oder eine geänderte Quelle ändert, was mit
+    den Fäden unterschrieben wurde. Gibt die zurückgesetzten Objekte zurück.
+    """
+    from . import lesecache
+    from .beweisschicht import veraendert_seit_freigabe
+    from .models import Entitaet, Quelle, Verbindung
+    from .pruefung import faeden_qs
+
+    zurueck = []
     art = "faden" if isinstance(objekt, Verbindung) else "karte" if isinstance(objekt, Entitaet) else ""
     if art and getattr(objekt, "status", None) == Status.FREIGEGEBEN and veraendert_seit_freigabe(objekt, art):
-        type(objekt).objects.filter(pk=objekt.pk).update(status=Status.ENTWURF)
-        objekt.status = Status.ENTWURF
-        return True
-    return False
+        zurueck.append(objekt)
+    abhaengig = Verbindung.objects.none()
+    if isinstance(objekt, Entitaet):
+        abhaengig = faeden_qs().filter(Q(von=objekt) | Q(nach=objekt), status=Status.FREIGEGEBEN)
+    elif isinstance(objekt, Quelle):
+        abhaengig = faeden_qs().filter(status=Status.FREIGEGEBEN, belege__quelle=objekt).distinct()
+    zurueck += [v for v in abhaengig if veraendert_seit_freigabe(v, "faden")]
+    for o in zurueck:
+        type(o).objects.filter(pk=o.pk).update(status=Status.ENTWURF)
+        o.status = Status.ENTWURF
+    if zurueck:
+        lesecache.veraltet()
+    return zurueck
 
 
 def pruefe_aendern(request, instanz, daten: dict) -> None:
@@ -84,6 +105,10 @@ def pruefe_aendern(request, instanz, daten: dict) -> None:
         raise PermissionDenied("Die Prüfregeln eines Boards ändert nur ein Mensch in der Oberfläche.")
     if getattr(instanz, "status", None) == Status.FREIGEGEBEN:
         raise Konflikt()
+    if _belegt_freigegebenes(instanz):
+        raise Konflikt("Diese Quelle belegt einen freigegebenen Faden. Ändern nur ein Mensch in der Oberfläche.")
+    if daten.get("oeffentliche_person") and not getattr(instanz, "oeffentliche_person", True):
+        raise PermissionDenied("Ob jemand eine öffentliche Person ist, entscheidet ein Mensch in der Oberfläche.")
     gewuenscht = _status_von(daten)
     if gewuenscht is not None and gewuenscht != getattr(instanz, "status", gewuenscht):
         raise PermissionDenied("Den Status ändert nur ein Mensch in der Oberfläche.")
@@ -92,8 +117,46 @@ def pruefe_aendern(request, instanz, daten: dict) -> None:
 
 
 def pruefe_loeschen(request, instanz) -> None:
-    if per_werkzeug(request) and getattr(instanz, "status", None) == Status.FREIGEGEBEN:
+    from .models import Board
+
+    if not per_werkzeug(request):
+        return
+    if isinstance(instanz, Board):
+        raise PermissionDenied("Boards löscht nur ein Mensch in der Oberfläche.")
+    if getattr(instanz, "status", None) == Status.FREIGEGEBEN or _belegt_freigegebenes(instanz):
         raise Konflikt("Freigegebenes löscht nur ein Mensch in der Oberfläche.")
+
+
+def _belegt_freigegebenes(instanz) -> bool:
+    from .models import Quelle, Verbindung
+
+    return isinstance(instanz, Quelle) and Verbindung.objects.filter(
+        belege__quelle=instanz, status=Status.FREIGEGEBEN).exists()
+
+
+def veroeffentlicht(board) -> bool:
+    """Sieht jemand außerhalb der Redaktion dieses Board (öffentlich oder Mitglieder-Board)?"""
+    from .permissions import mitglieder_boards
+
+    return bool(board.oeffentlich) or board.slug in mitglieder_boards()
+
+
+def pruefe_board_werkzeug(request, slug: str) -> None:
+    """Werkzeuge ändern kein veröffentlichtes Board: was dort liegt, entscheidet ein Mensch."""
+    if not per_werkzeug(request):
+        return
+    from .models import Board
+
+    board = Board.objects.filter(slug=slug).only("slug", "oeffentlich").first()
+    if board is not None and veroeffentlicht(board):
+        raise PermissionDenied("Ein veröffentlichtes Board ändert nur ein Mensch in der Oberfläche. Werkzeuge "
+                               "arbeiten auf einem Arbeits-Board; Fahrten und Anordnung sind erlaubt.")
+
+
+def pruefe_zettel(request, *arten: str) -> None:
+    """Meinungs-Zettel stehen in der Lese-Ansicht. Schreiben, ändern und löschen nur ein Mensch."""
+    if per_werkzeug(request) and ZettelArt.MEINUNG in arten:
+        raise PermissionDenied("Meinungs-Zettel schreibt nur ein Mensch. Werkzeuge legen Notizen oder Fragen an.")
 
 
 def _hat_status(modell) -> bool:

@@ -116,6 +116,13 @@ def test_lesemodus_sieht_oeffentliche_wand(backend):
                    env=backend["env"], check=True, capture_output=True)
     leser = bauen(Akte(backend["basis"]))
     assert "offen" in {b["slug"] for b in _rufe(leser, "boards_liste")["boards"]}
+    # Der Entwurf des Werkzeugs ist für Leser unsichtbar, bis ein Mensch ihn freigibt.
+    assert _rufe(leser, "wand_lesen", {"board": "offen"})["karten"] == []
+    # .update() löst kein Signal aus: den Lese-Cache selbst ungültig machen (wie es die Freigabe-API tut).
+    skript = ("from akte.models import Entitaet; from akte import lesecache; "
+              "Entitaet.objects.filter(name='Max Mustermann').update(status='freigegeben'); lesecache.veraltet()")
+    subprocess.run([backend["python"], "manage.py", "shell", "-c", skript], cwd=str(__import__("conftest").BACKEND),
+                   env=backend["env"], check=True, capture_output=True)
     wand = _rufe(leser, "wand_lesen", {"board": "offen"})
     assert [k["name"] for k in wand["karten"]] == ["Max Mustermann"]
     assert _rufe(leser, "suche", {"q": "muster"})["treffer"][0]["name"] == "Max Mustermann"

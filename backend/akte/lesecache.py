@@ -14,6 +14,7 @@ import logging
 import time
 
 from django.core.cache import cache
+from django.db import transaction
 
 SEKUNDEN = 300
 VERSION = "akte:oeffentlich:version"
@@ -27,13 +28,23 @@ def version() -> int:
         return -1
 
 
-def veraltet(**_) -> None:
-    """Signal-Empfänger: neue Version. Eine Uhrzeit statt eines Zählers, damit sich eine Version nie wiederholt,
-    auch wenn Redis den Schlüssel verdrängt."""
+def _neue_version() -> None:
     try:
         cache.set(VERSION, time.time_ns(), None)
     except Exception:  # noqa: BLE001
         log.warning("Akte: Cache-Version nicht gesetzt", exc_info=True)
+
+
+def veraltet(**_) -> None:
+    """Signal-Empfänger: neue Version. Eine Uhrzeit statt eines Zählers, damit sich eine Version nie wiederholt,
+    auch wenn Redis den Schlüssel verdrängt.
+
+    Zweimal: sofort und noch einmal nach dem Commit. Sonst könnte eine Anfrage zwischen Änderung und Commit den
+    alten Stand lesen und unter der neuen Version fünf Minuten lang in den Cache legen. Wer mit ``.update()``
+    speichert (kein Signal), ruft diese Funktion selbst auf.
+    """
+    _neue_version()
+    transaction.on_commit(_neue_version)
 
 
 def holen(slug: str, lesbar: set[str], rechnen):

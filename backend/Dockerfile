@@ -17,7 +17,8 @@ RUN useradd --create-home --uid 1000 akte \
     && chown -R akte:akte /daten /app
 USER akte
 
-RUN AKTE_TESTLAUF=1 python manage.py collectstatic --noinput
+# Nur für den Bau: collectstatic braucht einen Schlüssel, signiert aber nichts. Im Betrieb kommt er aus .env.
+RUN DJANGO_SECRET_KEY=nur-zum-bauen-collectstatic-signiert-nichts-0123456789 python manage.py collectstatic --noinput
 
 EXPOSE 8000
 ENTRYPOINT ["sh", "/app/start.sh"]

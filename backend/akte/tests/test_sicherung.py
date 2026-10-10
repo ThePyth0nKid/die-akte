@@ -112,7 +112,8 @@ class SicherungTest(_MitSpeicher):
         vorhanden = mock.Mock()
         vorhanden.json.return_value = {"archived_snapshots": {"closest": {
             "available": True, "url": "http://web.archive.org/web/20250101000000/https://x.example/a"}}}
-        with mock.patch("akte.sicherung.requests.get", side_effect=[gedrosselt, vorhanden]):
+        with mock.patch("akte.sicherung.requests.get", side_effect=[gedrosselt, vorhanden]), \
+             mock.patch("akte.sicherung.pruefe_url"):
             from akte.sicherung import archive_org_sichern
 
             s = archive_org_sichern(q)

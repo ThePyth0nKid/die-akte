@@ -2,7 +2,20 @@
 :8080 {
 	encode gzip
 
-	@backend path /api/v1/* /admin/* /static/*
+	# Sicherheitsköpfe für alles, was dieser Eingang ausliefert. „?“ = nur setzen, wenn die Antwort keinen eigenen
+	# trägt (Beweis-Dateien kommen mit einer strengeren CSP aus Django, die bleibt).
+	header {
+		?X-Content-Type-Options nosniff
+		?Referrer-Policy same-origin
+		?X-Frame-Options DENY
+		?Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		?Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Die Django-Verwaltung (/admin) ist bewusst nicht erreichbar. Wer sie braucht:
+	# docker compose exec api python manage.py … oder eine eigene, nur lokale Route.
+	@backend path /api/v1/* /static/*
 	handle @backend {
 		reverse_proxy api:8000
 	}

@@ -22,7 +22,7 @@ class DemoTest(TestCase):
         fundstellen = Sicherung.objects.filter(art="fundstelle")
         self.assertEqual(fundstellen.filter(status="fertig").count(), 6)
         self.assertEqual(fundstellen.filter(status="fehler").count(), 1)  # das absichtlich falsche Zitat
-        self.assertEqual(Ereignis.objects.filter(typ="akte.freigabe").count(), 12)
+        self.assertEqual(Ereignis.objects.filter(typ="akte.freigabe").count(), 13)
         export = beweisschicht.export()
         self.assertTrue(trace_pruefen(export["trace"], export["buendel"], strikte_kette=True).gueltig)
         self.assertTrue(pruefen(export["trace"], export["offenlegung"]).gueltig)

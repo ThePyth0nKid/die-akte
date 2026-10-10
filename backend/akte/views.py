@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import SAFE_METHODS, AllowAny
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.parsers import MultiPartParser
@@ -61,7 +61,8 @@ from .permissions import (
     lese_boards,
     mitglieder_boards,
 )
-from .pruefung import darf_oeffentlich, pruefe_verbindung, sperrende
+from .beweisschicht import freigaben_prefetch, veraendert_seit_freigabe
+from .pruefung import darf_oeffentlich, faeden_qs, pruefe_verbindung, sperrende
 from .regeln import uebersicht as regeln_uebersicht
 from .serializers import (
     BeweisSerializer,
@@ -82,18 +83,31 @@ from .sicherung import anhang_speichern, sicherung_anstossen
 from .verlauf import protokolliere
 
 
-def _faeden_qs():
-    return Verbindung.objects.select_related("von", "nach").prefetch_related(
-        "belege__quelle__sicherungen__beleg", "ueberstimmungen"
-    )
+_faeden_qs = faeden_qs
+
+
+def nur_gepruefte() -> bool:
+    """Lese-Ansicht für Mitglieder und Besucher: nur Freigegebenes, das die Prüfung besteht (Standard), oder jeder
+    belegte Faden (``AKTE_LESEANSICHT=alles_belegte``, nur für geschlossene Runden)."""
+    return getattr(settings, "AKTE_LESEANSICHT", "nur_gepruefte") != "alles_belegte"
 
 
 class Redaktion:
-    """Nur die Redaktion. Neben dem Login (JWT) auch ein persönlicher Token für Werkzeuge,
-    damit Claude per ``scripts/akte/akte.py`` an der Wand arbeiten kann."""
+    """Nur die Redaktion. Neben dem Login (JWT) auch ein persönlicher Token für Werkzeuge (CLI, MCP).
+
+    Werkzeuge ändern kein veröffentlichtes Board (``menschenrecht.pruefe_board_werkzeug``); Ausnahmen setzen
+    ``werkzeug_auf_veroeffentlichten = True`` (Fahrten und Anordnung, die Leser nicht als Inhalt sehen).
+    """
 
     authentication_classes = [JWTAuthentication, TokenAuthentication]
     permission_classes = [IstRedaktion]
+    werkzeug_auf_veroeffentlichten = False
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        slug = kwargs.get("slug")
+        if slug and request.method not in SAFE_METHODS and not self.werkzeug_auf_veroeffentlichten:
+            menschenrecht.pruefe_board_werkzeug(request, slug)
 
 
 class MitVerlauf(Redaktion):
@@ -117,8 +131,8 @@ class MitVerlauf(Redaktion):
         try:
             with transaction.atomic():
                 obj = serializer.save()
-                if menschenrecht.nach_aenderung(obj):
-                    protokolliere(obj, "zurueck_auf_entwurf", self.request.user)
+                for zurueck in menschenrecht.nach_aenderung(obj):
+                    protokolliere(zurueck, "zurueck_auf_entwurf", self.request.user)
                 protokolliere(obj, "geaendert", self.request.user)
         except IntegrityError:
             raise ValidationError("Konflikt beim Speichern. Bitte neu laden.") from None
@@ -320,6 +334,8 @@ class SicherungDateiView(Redaktion, APIView):
             daten = speicher.lesen(s.schluessel)
         except (speicher.SpeicherFehlt, FileNotFoundError):
             raise Http404 from None
+        except speicher.KopieBeschaedigt as fehler:
+            return Response({"detail": str(fehler)}, status=status.HTTP_409_CONFLICT)
         mime, art = _AUSLIEFERN_ALS.get(s.mime, ("application/octet-stream", "attachment"))
         endung = s.schluessel.rsplit(".", 1)[-1]
         antwort = HttpResponse(daten, content_type=mime)
@@ -415,8 +431,12 @@ def _mappen_kinder() -> dict[int, list[int]]:
 
 
 def _mappen_stand(board: Board, direkt: dict[int, int], erlaubt: set[int] | None = None,
-                  nur_belegt: bool = False, hier_ausgeblendete: bool = False) -> dict:
-    """Lädt, was die Mappen dieser Wand brauchen, und rechnet Lage, Bündel, Zähler, Gesichter, Miniatur."""
+                  nur_belegt: bool = False, hier_ausgeblendete: bool = False, streng: bool = False) -> dict:
+    """Lädt, was die Mappen dieser Wand brauchen, und rechnet Lage, Bündel, Zähler, Gesichter, Miniatur.
+
+    ``streng`` (Lese-Ansicht ``nur_gepruefte``): nur freigegebene Karten und nur Fäden, die die Prüfung dieser Wand
+    bestehen, zählen mit, auch in Zählern, Gesichtern und Miniaturen.
+    """
     mappen = [m for m in board.mappen.select_related("ziel") if erlaubt is None or m.ziel_id in erlaubt]
     if not mappen:
         return {"mappen": []}
@@ -426,7 +446,10 @@ def _mappen_stand(board: Board, direkt: dict[int, int], erlaubt: set[int] | None
         unter |= teilbaum(m.ziel_id, kinder, erlaubt)
     karten_je_board: dict[int, set[int]] = defaultdict(set)
     lagen: dict[int, list[tuple[float, float]]] = defaultdict(list)
-    for b, e, x, y in BoardKarte.objects.filter(board_id__in=unter).values_list("board_id", "entitaet_id", "x", "y"):
+    karten_qs = BoardKarte.objects.filter(board_id__in=unter)
+    if streng:
+        karten_qs = karten_qs.filter(entitaet__status=Status.FREIGEGEBEN)
+    for b, e, x, y in karten_qs.values_list("board_id", "entitaet_id", "x", "y"):
         karten_je_board[b].add(e)
         lagen[b].append((x, y))
     lage = lage_rechnen(direkt, [(m.id, m.ziel_id) for m in mappen], kinder, karten_je_board, erlaubt)
@@ -441,6 +464,9 @@ def _mappen_stand(board: Board, direkt: dict[int, int], erlaubt: set[int] | None
     qs = Verbindung.objects.filter(von_id__in=alle, nach_id__in=alle)
     if nur_belegt:
         qs = qs.filter(aussageart=Aussageart.BELEGT, belege__isnull=False).distinct()
+    if streng:
+        kandidaten = faeden_qs().filter(id__in=qs.filter(status=Status.FREIGEGEBEN).values("id"))
+        qs = Verbindung.objects.filter(id__in=[v.id for v in kandidaten if darf_oeffentlich(v, board)])
     alle_zeilen = [
         (fid, von, nach, typ, art, betrag is not None)
         for fid, von, nach, typ, art, betrag in qs.values_list("id", "von_id", "nach_id", "typ", "aussageart", "betrag")
@@ -558,12 +584,12 @@ def _mappen_mitglieder(board: Board, karten: list[BoardKarte], nr: dict[int, int
     erlaubt = set(Board.objects.filter(slug__in=lesbar).values_list("id", flat=True))
     direkt = {k.entitaet_id: k.id for k in karten}
     karte_zu_entitaet = {k.id: k.entitaet_id for k in karten}
-    verdeckt = {k.entitaet_id for k in karten if k.entitaet.ist_privatperson}
+    verdeckt = {k.entitaet_id for k in karten if _verdeckt(k.entitaet)}
     auch_in_roh = _auch_in(board, [e for e in direkt if e not in verdeckt], erlaubt)
     grundgeruest = {"mappen": [], "buendel": [], "buendel_faeden": [], "ausser_haus": [],
                     "auch_in": {str(nr[e]): boards for e, boards in auch_in_roh.items()},
                     "eltern": _eltern(board, erlaubt), "gelenke": []}
-    st = _mappen_stand(board, direkt, erlaubt=erlaubt, nur_belegt=True)
+    st = _mappen_stand(board, direkt, erlaubt=erlaubt, nur_belegt=True, streng=nur_gepruefte())
     if not st["mappen"]:
         return grundgeruest
     lage = st["lage"]
@@ -583,6 +609,8 @@ def _mappen_mitglieder(board: Board, karten: list[BoardKarte], nr: dict[int, int
         return f"k-{nr[karte_zu_entitaet[wert]]}" if art == "k" else f"m-{mnr[wert]}"
 
     def gesicht(e: Entitaet) -> dict:
+        if _verdeckt(e):
+            return {"typ": e.typ, "name": e.initialen(), "bild_url": "", "bild_nachweis": ""}
         return {"typ": e.typ, "name": e.name, "bild_url": e.bild_url, "bild_nachweis": e.bild_nachweis}
 
     def aussen(e: Entitaet) -> dict:
@@ -632,9 +660,15 @@ def _alle_auf_der_wand(board: Board) -> set[int]:
 # IDs sind über alle Boards gleich und machten eine verdeckte Person wiedererkennbar.
 
 
+def _verdeckt(e: Entitaet) -> bool:
+    """Nur Initialen: Privatpersonen und Personen, deren Kennzeichnung als öffentliche Person noch kein Mensch
+    unterschrieben hat (ein Werkzeug darf eine Person nicht selbst öffentlich machen)."""
+    return e.ist_privatperson or (e.typ == "person" and e.status != Status.FREIGEGEBEN)
+
+
 def _mitglied_karte(k: BoardKarte, nr: int) -> dict:
     e = k.entitaet
-    verdeckt = e.ist_privatperson
+    verdeckt = _verdeckt(e)
     return {
         "id": nr, "entitaet": nr, "x": k.x, "y": k.y, "farbe": k.farbe,
         "entitaet_detail": {
@@ -643,7 +677,7 @@ def _mitglied_karte(k: BoardKarte, nr: int) -> dict:
             "kurzbeschreibung": "" if verdeckt else e.kurzbeschreibung,
             "bild_url": "" if verdeckt else e.bild_url,
             "bild_nachweis": "" if verdeckt else e.bild_nachweis,
-            "oeffentliche_person": e.oeffentliche_person, "status": e.status,
+            "oeffentliche_person": e.oeffentliche_person and not verdeckt, "status": e.status,
         },
     }
 
@@ -673,24 +707,35 @@ def _mitglied_faden(v: Verbindung, nr: dict[int, int], fnr: int, qnr: dict[int, 
 def wand_fuer_mitglieder(board: Board, lesbar: set[str] | None = None) -> dict:
     """Die Wand zum Lesen: Karten, Rahmen, belegte Fäden mit Quelle und die Meinungs-Zettel der Redaktion.
 
+    Standard (``AKTE_LESEANSICHT=nur_gepruefte``): nur Karten, die ein Mensch freigegeben hat und die seitdem
+    unverändert sind, und nur Fäden, die die Prüfung dieser Wand bestehen (freigegeben, unverändert, kein
+    sperrender Befund). Meinungs-Zettel schreiben nur Menschen (``menschenrecht.pruefe_zettel``).
+
     ``lesbar``: Slugs, deren Mappen, Portale und Brotkrumen sichtbar sind (Standard: Mitglieder-Boards).
     Frage- und Notiz-Zettel bleiben intern: Sie sind Redaktionsnotizen und nennen Privatpersonen,
     deren Karten nur Initialen zeigen.
     """
     if lesbar is None:
         lesbar = mitglieder_boards()
-    karten = list(board.karten.select_related("entitaet").order_by("id"))
+    streng = nur_gepruefte()
+    karten = list(board.karten.select_related("entitaet").prefetch_related(freigaben_prefetch("entitaet__ereignisse"))
+                  .order_by("id"))
+    if streng:
+        karten = [k for k in karten if k.entitaet.status == Status.FREIGEGEBEN
+                  and not veraendert_seit_freigabe(k.entitaet, "karte")]
     auf_der_wand = {k.entitaet_id for k in karten}
     nr = {k.entitaet_id: i for i, k in enumerate(karten, start=1)}
     ausgeblendet = set(board.ausgeblendete_verbindungen.values_list("id", flat=True))
     faeden = (
-        Verbindung.objects.filter(von_id__in=auf_der_wand, nach_id__in=auf_der_wand, aussageart=Aussageart.BELEGT)
+        faeden_qs().filter(von_id__in=auf_der_wand, nach_id__in=auf_der_wand, aussageart=Aussageart.BELEGT)
         .exclude(id__in=ausgeblendet)
         .order_by("id")
-        .prefetch_related("belege__quelle")
     )
+    if streng:
+        faeden = faeden.filter(status=Status.FREIGEGEBEN)
+    sichtbar = (v for v in faeden if v.belege.all() and (not streng or darf_oeffentlich(v, board)))
     qnr: dict[int, int] = {}
-    faeden_daten = [_mitglied_faden(v, nr, i, qnr) for i, v in enumerate((v for v in faeden if v.belege.all()), start=1)]
+    faeden_daten = [_mitglied_faden(v, nr, i, qnr) for i, v in enumerate(sichtbar, start=1)]
     return {
         "board": {"id": board.id, "titel": board.titel, "slug": board.slug, "beschreibung": board.beschreibung,
                   "look": board.look, "darf_bearbeiten": False},
@@ -789,6 +834,14 @@ class ZettelDetailView(_BoardTeilView):
     modell = Zettel
     serializer_class = ZettelSerializer
 
+    def perform_update(self, serializer):
+        menschenrecht.pruefe_zettel(self.request, serializer.instance.art, serializer.validated_data.get("art", ""))
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        menschenrecht.pruefe_zettel(self.request, instance.art)
+        instance.delete()
+
 
 class RahmenDetailView(_BoardTeilView):
     modell = Rahmen
@@ -798,6 +851,7 @@ class RahmenDetailView(_BoardTeilView):
 class FahrtDetailView(_BoardTeilView):
     modell = Fahrt
     serializer_class = FahrtSerializer
+    werkzeug_auf_veroeffentlichten = True
 
 
 class MappeDetailView(MitVerlauf, _BoardTeilView):
@@ -851,6 +905,10 @@ class BeweisDetailView(_BoardTeilView):
 class ZettelAnlegenView(_BoardTeilAnlegenView):
     serializer_class = ZettelSerializer
 
+    def perform_create(self, serializer):
+        menschenrecht.pruefe_zettel(self.request, serializer.validated_data.get("art", ZettelArt.NOTIZ))
+        super().perform_create(serializer)
+
 
 class RahmenAnlegenView(_BoardTeilAnlegenView):
     serializer_class = RahmenSerializer
@@ -858,10 +916,13 @@ class RahmenAnlegenView(_BoardTeilAnlegenView):
 
 class FahrtAnlegenView(_BoardTeilAnlegenView):
     serializer_class = FahrtSerializer
+    werkzeug_auf_veroeffentlichten = True
 
 
 class PositionenView(Redaktion, APIView):
     """Nach dem Ziehen: viele Positionen auf einmal speichern."""
+
+    werkzeug_auf_veroeffentlichten = True
 
     MODELLE = {"karte": BoardKarte, "zettel": Zettel, "rahmen": Rahmen, "beweis": BoardBeweis, "mappe": Mappe}
 
@@ -920,6 +981,8 @@ class PruefungView(Redaktion, APIView):
 class AufraeumenView(Redaktion, APIView):
     """Ordnet die ganze Wand neu, ohne Überlappung (siehe ``layout.py``)."""
 
+    werkzeug_auf_veroeffentlichten = True
+
     @transaction.atomic
     def post(self, request, slug):
         board = _board(slug)
@@ -966,6 +1029,8 @@ class FahrtAusBeschreibungView(Redaktion, APIView):
     ``{"titel": "K3", "format": "16:9", "stationen": [{"fokus": ["Max Mustermann", "Nordlicht"],
     "stichwort": "…", "dauer_ms": 1400, "zoom": null}]}`` — leerer Fokus zeigt die ganze Wand.
     """
+
+    werkzeug_auf_veroeffentlichten = True
 
     @transaction.atomic
     def post(self, request, slug):
@@ -1104,7 +1169,9 @@ class OeffentlicheWandView(APIView):
         if not getattr(settings, "AKTE_OEFFENTLICH_AKTIV", False):
             raise Http404
         board = get_object_or_404(Board, slug=slug, oeffentlich=True)
-        karten = list(board.karten.select_related("entitaet").filter(entitaet__status=Status.FREIGEGEBEN))
+        karten = [k for k in board.karten.select_related("entitaet").prefetch_related(
+            freigaben_prefetch("entitaet__ereignisse")).filter(entitaet__status=Status.FREIGEGEBEN)
+            if not veraendert_seit_freigabe(k.entitaet, "karte")]
         ids = {k.entitaet_id for k in karten}
         ausgeblendet = set(board.ausgeblendete_verbindungen.values_list("id", flat=True))
         faeden = [

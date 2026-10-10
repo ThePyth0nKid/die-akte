@@ -30,6 +30,8 @@ class Command(BaseCommand):
         parser.add_argument("--benutzer", help="Benutzername des Redaktionskontos")
         parser.add_argument("--email", default="", help="E-Mail-Adresse (optional)")
         parser.add_argument("--token", action="store_true", help="Token für Werkzeuge und MCP ausgeben")
+        parser.add_argument("--admin", action="store_true",
+                            help="zusätzlich Zugang zur Django-Verwaltung (/admin; im Docker-Betrieb nicht erreichbar)")
 
     def handle(self, *args, **opts):
         gruppe, _ = Group.objects.get_or_create(name=REDAKTION_GRUPPE)
@@ -47,7 +49,7 @@ class Command(BaseCommand):
             except ValidationError as fehler:
                 raise CommandError(" ".join(fehler.messages)) from None
             konto.set_password(passwort)
-            konto.is_staff = True
+            konto.is_staff = bool(opts["admin"])
             konto.save()
             self.stdout.write(self.style.SUCCESS(f"Konto „{benutzer}“ angelegt."))
         else:

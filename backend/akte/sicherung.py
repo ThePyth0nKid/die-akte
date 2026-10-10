@@ -18,6 +18,7 @@ import html
 import logging
 import re
 import time
+from urllib.parse import urlsplit
 
 import requests
 from django.conf import settings
@@ -25,7 +26,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import speicher
-from .abruf import ARTEN, BILDER, AbrufFehler, abrufen, erkenne
+from .abruf import ARTEN, BILDER, AbrufFehler, abrufen, erkenne, pruefe_url
 from .models import Quelle, Sicherung, SicherungArt, SicherungStatus
 
 logger = logging.getLogger(__name__)
@@ -178,8 +179,27 @@ def _vorhandener_schnappschuss(url: str) -> str:
     return naechster.get("url", "").replace("http://web.archive.org", "https://web.archive.org") if naechster.get("available") else ""
 
 
-def archive_org_sichern(quelle: Quelle, versuch: int = 0) -> Sicherung:
-    """Frischer Schnappschuss; gelingt er nicht, zählt der jüngste vorhandene, und später wird es erneut versucht."""
+def _archiv_verweigert(url: str) -> str:
+    """Warum diese Adresse nicht an archive.org geht (leer = sie darf). archive.org bekommt die URL und macht sie
+    öffentlich: keine Zugangsdaten in der Adresse, nichts aus dem eigenen Netz."""
+    teile = urlsplit(url)
+    if teile.username or teile.password:
+        return "Die Adresse enthält Zugangsdaten und geht nicht an archive.org."
+    try:
+        pruefe_url(url)
+    except AbrufFehler as fehler:
+        return f"Nicht an archive.org gegeben: {fehler}"
+    return ""
+
+
+def archive_org_sichern(quelle: Quelle, versuch: int = 0) -> Sicherung | None:
+    """Frischer Schnappschuss; gelingt er nicht, zählt der jüngste vorhandene, und später wird es erneut versucht.
+    Mit ``AKTE_ARCHIV_AKTIV`` aus geht nichts an archive.org (Ergebnis ``None``)."""
+    if not getattr(settings, "AKTE_ARCHIV_AKTIV", True):
+        return None
+    verweigert = _archiv_verweigert(quelle.url)
+    if verweigert:
+        return _fehler(quelle, SicherungArt.ARCHIVE_ORG, verweigert)
     ziel, text, voruebergehend = _schnappschuss_anlegen(quelle.url)
     vermerk = ""
     if not ziel:
@@ -291,7 +311,13 @@ def fundstelle_jetzt(beleg) -> str:
     if kopie and kopie.mime == "application/pdf":
         from .rendern import fundstelle_pdf
 
-        bild = fundstelle_pdf(speicher.lesen(kopie.schluessel), beleg.zitat_woertlich)
+        try:
+            pdf = speicher.lesen(kopie.schluessel)
+        except speicher.KopieBeschaedigt as fehler:
+            s = _fehler(quelle, SicherungArt.FUNDSTELLE, str(fehler))
+            Sicherung.objects.filter(pk=s.pk).update(beleg=beleg)
+            return "nichts"
+        bild = fundstelle_pdf(pdf, beleg.zitat_woertlich)
         if bild:
             s = _ablegen(quelle, SicherungArt.FUNDSTELLE, bild)
             Sicherung.objects.filter(pk=s.pk).update(beleg=beleg)
