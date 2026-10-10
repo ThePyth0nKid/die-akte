@@ -25,7 +25,7 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from . import lesecache, speicher
+from . import lesecache, menschenrecht, speicher
 from .export import vault_zip
 from .graph import finde_weg
 from .kamera import bild_fuer, format_name, karten_rechteck
@@ -103,14 +103,16 @@ class MitVerlauf(Redaktion):
     """
 
     def perform_create(self, serializer):
+        zusatz = menschenrecht.pruefe_anlegen(self.request, serializer.Meta.model, serializer.validated_data)
         try:
             with transaction.atomic():
-                obj = serializer.save(erstellt_von=self.request.user)
+                obj = serializer.save(erstellt_von=self.request.user, **zusatz)
                 protokolliere(obj, "angelegt", self.request.user)
         except IntegrityError:
             raise ValidationError("Gleichzeitig angelegt oder schon vorhanden. Bitte neu laden.") from None
 
     def perform_update(self, serializer):
+        menschenrecht.pruefe_aendern(self.request, serializer.instance, serializer.validated_data)
         try:
             with transaction.atomic():
                 obj = serializer.save()
@@ -120,6 +122,7 @@ class MitVerlauf(Redaktion):
 
     @transaction.atomic
     def perform_destroy(self, instance):
+        menschenrecht.pruefe_loeschen(self.request, instance)
         protokolliere(instance, "geloescht", self.request.user)
         instance.delete()
 
