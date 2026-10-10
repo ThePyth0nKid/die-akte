@@ -5,9 +5,15 @@ Explizite ``urlpatterns`` wie in ``events/urls.py``; feste Pfade vor den Slugs.
 
 from django.urls import path
 
-from . import views
+from . import views, views_beweis
 
 urlpatterns = [
+    path("beweis/schluessel/", views_beweis.SchluesselView.as_view(), name="akte-beweis-schluessel"),
+    path("beweis/freigabe/vorbereiten/", views_beweis.FreigabeVorbereitenView.as_view(),
+         name="akte-beweis-vorbereiten"),
+    path("beweis/freigabe/abschliessen/", views_beweis.FreigabeAbschliessenView.as_view(),
+         name="akte-beweis-abschliessen"),
+    path("beweis/export/", views_beweis.ExportView.as_view(), name="akte-beweis-export"),
     path("entitaeten/", views.EntitaetListeView.as_view(), name="akte-entitaeten"),
     path("entitaeten/<int:pk>/", views.EntitaetDetailView.as_view(), name="akte-entitaet"),
     path("quellen/", views.QuelleListeView.as_view(), name="akte-quellen"),

@@ -4,7 +4,9 @@ name: die-akte
 
 services:
   api:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file: .env
     environment:
       AKTE_DATEN: /daten

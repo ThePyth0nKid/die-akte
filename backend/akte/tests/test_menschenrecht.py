@@ -2,7 +2,7 @@
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
@@ -50,6 +50,13 @@ class MenschenrechtTest(TestCase):
         self.assertEqual(self.werkzeug.delete(f"/api/v1/akte/entitaeten/{e.id}/").status_code, 409)
         self.assertTrue(Entitaet.objects.filter(pk=e.id).exists())
 
+    def test_mensch_gibt_nur_mit_unterschrift_frei(self):
+        e = Entitaet.objects.create(name="Nordlicht Analytik", slug="nordlicht", typ="firma")
+        r = self.mensch.patch(f"/api/v1/akte/entitaeten/{e.id}/", {"status": "freigegeben"}, format="json")
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("unterschreiben", r.json()["detail"])
+
+    @override_settings(AKTE_SIGNIERTE_FREIGABE=False)
     def test_mensch_gibt_frei_und_aendert(self):
         e = Entitaet.objects.create(name="Nordlicht Analytik", slug="nordlicht", typ="firma")
         r = self.mensch.patch(f"/api/v1/akte/entitaeten/{e.id}/", {"status": "freigegeben"}, format="json")

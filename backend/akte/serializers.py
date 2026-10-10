@@ -165,7 +165,8 @@ class VerbindungSerializer(serializers.ModelSerializer):
         read_only_fields = _NUR_LESEN
 
     def get_befunde(self, v):
-        return [{"code": b.code, "text": b.text} for b in pruefe_verbindung(v)]
+        return [{"code": b.code, "text": b.text, "schwere": b.schwere, "ueberstimmt": b.ueberstimmt}
+                for b in pruefe_verbindung(v, self.context.get("board"))]
 
     def validate_konfidenz(self, wert):
         if wert not in (1, 2, 3):
@@ -210,8 +211,16 @@ class BoardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Board
-        fields = ["id", "titel", "slug", "beschreibung", "look", "oeffentlich", *_NUR_LESEN]
+        fields = ["id", "titel", "slug", "beschreibung", "look", "oeffentlich", "regeln", *_NUR_LESEN]
         read_only_fields = _NUR_LESEN
+
+    def validate_regeln(self, wert):
+        from .regeln import pruefe_board_regeln
+
+        try:
+            return pruefe_board_regeln(wert)
+        except ValueError as fehler:
+            raise serializers.ValidationError(str(fehler)) from None
 
     def validate(self, daten):
         if not self.instance and not daten.get("slug"):

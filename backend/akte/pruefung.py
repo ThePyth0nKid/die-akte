@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from .models import Aussageart, Status, Verbindung, VerbindungTyp
+from .regeln import AUS, SPERRT, ZUSTAND, einstellung
 
 #: Wie viele voneinander unabhängige Quellen ein Verdacht gegen eine Person braucht.
 VERDACHT_MIN_QUELLEN = 2
@@ -21,6 +22,10 @@ VERDACHT_MIN_QUELLEN = 2
 class Befund:
     code: str
     text: str
+    #: Stufe der Regel (akte/regeln.py): "hinweis" oder "sperrt". Regeln auf "aus" erscheinen nicht.
+    schwere: str = SPERRT
+    #: Ein Mensch hat diesen Befund mit Begründung überstimmt (nur Belegregeln, nie Zustandsregeln).
+    ueberstimmt: bool = False
 
 
 def _domain(url: str) -> str:
@@ -37,14 +42,34 @@ def unabhaengige_quellen(verbindung: Verbindung) -> int:
     return len(herkuenfte)
 
 
-def pruefe_verbindung(v: Verbindung) -> list[Befund]:
-    """Alle sperrenden Befunde eines Fadens. Leere Liste = darf öffentlich.
+def pruefe_verbindung(v: Verbindung, board=None, *, ohne_zustand: bool = False) -> list[Befund]:
+    """Alle Befunde eines Fadens mit ihrer Stufe (Standard, ``AKTE_REGELN``, ``Board.regeln``).
+
+    Öffentlich darf ein Faden, wenn kein Befund sperrt (``darf_oeffentlich``). ``ohne_zustand`` lässt die
+    Zustandsregeln weg (für die Freigabe selbst, die genau diesen Zustand herstellt).
 
     Erwartet ``select_related("von", "nach")`` und ``prefetch_related("belege__quelle")``
     (siehe ``views._faeden_qs``), sonst kostet jeder Faden drei Abfragen.
     Regel 2 (Aussageart) und 5 (Güte ★/☆) erzwingt das Modell selbst: beide Felder
     sind Pflicht mit festen Werten.
     """
+    roh = _roh_befunde(v, ohne_zustand)
+    stufen = einstellung(board)
+    ueberstimmt = {u.code for u in v.ueberstimmungen.all()} if v.pk else set()
+    befunde = []
+    for b in roh:
+        stufe = stufen.stufe(b.code)
+        if stufe == AUS:
+            continue
+        befunde.append(Befund(b.code, b.text, stufe, b.code in ueberstimmt and b.code not in ZUSTAND))
+    return befunde
+
+
+def sperrende(befunde: list[Befund]) -> list[Befund]:
+    return [b for b in befunde if b.schwere == SPERRT and not b.ueberstimmt]
+
+
+def _roh_befunde(v: Verbindung, ohne_zustand: bool) -> list[Befund]:
     befunde: list[Befund] = []
     belege = list(v.belege.all())
     personen = [e for e in (v.von, v.nach) if e.typ == "person"]
@@ -93,7 +118,13 @@ def pruefe_verbindung(v: Verbindung) -> list[Befund]:
     if privat and v.typ == VerbindungTyp.FAMILIE:
         befunde.append(Befund("familie_privatperson", "Familienbande von Privatpersonen bleiben intern."))
 
-    # Regel 7: Freigabe. Faden und beide Enden müssen von der Redaktion freigegeben sein.
+    if ohne_zustand:
+        return befunde
+    # Regel 7: Freigabe. Faden und beide Enden müssen von einem Menschen freigegeben sein.
+    from .beweisschicht import veraendert_seit_freigabe
+
+    if v.status == Status.FREIGEGEBEN and veraendert_seit_freigabe(v, "faden"):
+        befunde.append(Befund("veraendert_seit_freigabe", "Seit der Freigabe verändert: neu unterschreiben."))
     if v.status != Status.FREIGEGEBEN:
         befunde.append(Befund("faden_nicht_freigegeben", "Faden ist nicht freigegeben."))
     for e in (v.von, v.nach):
@@ -103,5 +134,5 @@ def pruefe_verbindung(v: Verbindung) -> list[Befund]:
     return befunde
 
 
-def darf_oeffentlich(v: Verbindung) -> bool:
-    return not pruefe_verbindung(v)
+def darf_oeffentlich(v: Verbindung, board=None) -> bool:
+    return not sperrende(pruefe_verbindung(v, board))

@@ -191,6 +191,8 @@ class Board(Zeitstempel):
     #: ``settings.AKTE_OEFFENTLICH_AKTIV`` und die Prüfung je Faden.
     oeffentlich = models.BooleanField(default=False)
     ausgeblendete_verbindungen = models.ManyToManyField(Verbindung, blank=True, related_name="+")
+    #: Stufen der Prüfregeln für dieses Board: {code: "aus" | "hinweis" | "sperrt"} (akte/regeln.py).
+    regeln = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-geaendert_am"]
@@ -389,3 +391,80 @@ class BoardBeweis(models.Model):
     class Meta:
         unique_together = [("board", "quelle")]
         verbose_name_plural = "Beweisstücke auf Boards"
+
+
+# ─── Beweisschicht: Schlüssel, signierte Ereignisse, Überstimmungen ─────────────
+
+
+class Instanz(models.Model):
+    """Genau eine Zeile: die Kennung dieser Installation (Arbeitsbereich der Ereigniskette)."""
+
+    kennung = models.UUIDField(unique=True)
+    erstellt_am = models.DateTimeField(auto_now_add=True)
+
+
+class SchluesselRolle(models.TextChoices):
+    MENSCH = "mensch", "Mensch"
+    GERAET = "geraet", "Gerät"
+    AGENT = "agent", "Agent"
+
+
+class Schluessel(models.Model):
+    """Öffentlicher Ed25519-Schlüssel. Der private Schlüssel eines Menschen verlässt nie seinen Browser."""
+
+    kid = models.CharField(max_length=200, unique=True)
+    rolle = models.CharField(max_length=10, choices=SchluesselRolle.choices)
+    nutzer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+                               related_name="akte_schluessel")
+    oeffentlich = models.CharField(max_length=64, help_text="32 Byte, base64url ohne Auffüllung")
+    fingerabdruck = models.CharField(max_length=16)
+    erstellt_am = models.DateTimeField(auto_now_add=True)
+    widerrufen_am = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name_plural = "Schlüssel"
+
+    def __str__(self):
+        return self.kid
+
+
+class Ereignis(models.Model):
+    """Ein signiertes Ereignis der Kette (Format atlas-trace-v1). ``json`` ist genau das signierte Ereignis.
+
+    ``salz`` und ``inhalt`` sind die Offenlegung zur Zusage in der Nutzlast; sie bleiben auf dem Server, bis das
+    betroffene Objekt öffentlich wird.
+    """
+
+    position = models.PositiveIntegerField(unique=True)
+    event_id = models.CharField(max_length=40, unique=True)
+    event_hash = models.CharField(max_length=64, unique=True)
+    typ = models.CharField(max_length=40)
+    kid = models.CharField(max_length=200)
+    json = models.TextField()
+    salz = models.CharField(max_length=40, blank=True)
+    inhalt = models.JSONField(null=True, blank=True)
+    entitaet = models.ForeignKey(Entitaet, on_delete=models.SET_NULL, null=True, blank=True, related_name="ereignisse")
+    verbindung = models.ForeignKey(Verbindung, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name="ereignisse")
+    sicherung = models.ForeignKey(Sicherung, on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name="ereignisse")
+    erstellt_am = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["position"]
+        verbose_name_plural = "Ereignisse"
+
+
+class Ueberstimmung(models.Model):
+    """Ein Mensch überstimmt einen Befund der Prüfung, mit Begründung. Gilt, bis sich der Faden ändert."""
+
+    verbindung = models.ForeignKey(Verbindung, on_delete=models.CASCADE, related_name="ueberstimmungen")
+    code = models.CharField(max_length=60)
+    begruendung = models.TextField()
+    nutzer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    ereignis = models.ForeignKey(Ereignis, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    erstellt_am = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("verbindung", "code")]
+        verbose_name_plural = "Überstimmungen"

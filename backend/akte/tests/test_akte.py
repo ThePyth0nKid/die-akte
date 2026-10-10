@@ -252,9 +252,18 @@ class OeffentlichTest(TestCase):
         self.assertEqual(self.client.get("/api/v1/akte/oeffentlich/nordlicht/").status_code, 404)
 
     @override_settings(AKTE_OEFFENTLICH_AKTIV=True)
-    def test_oeffentliche_wand_zeigt_nur_gepruefte_faeden(self):
+    def test_oeffentliche_wand_folgt_den_regelstufen(self):
+        # Standard: „ohne Beleg“ ist ein Hinweis (ein Mensch hat freigegeben), Verdacht gegen eine Privatperson sperrt.
         daten = self.client.get("/api/v1/akte/oeffentlich/nordlicht/").json()
-        # Nur der belegte Faden Mustermann → Nordlicht geht raus.
+        self.assertEqual(len(daten["faeden"]), 2)
+        self.assertNotIn("verdacht", {f.get("aussageart") for f in daten["faeden"]})
+
+    @override_settings(AKTE_OEFFENTLICH_AKTIV=True)
+    def test_oeffentliche_wand_zeigt_nur_gepruefte_faeden(self):
+        # Dieses Board stellt „ohne Beleg“ auf Sperre: nur der belegte Faden Mustermann → Nordlicht geht raus.
+        self.board.regeln = {"ohne_quelle": "sperrt"}
+        self.board.save()
+        daten = self.client.get("/api/v1/akte/oeffentlich/nordlicht/").json()
         self.assertEqual(len(daten["faeden"]), 1)
         namen_je_kennung = {k["id"]: k["name"] for k in daten["karten"]}
         f = daten["faeden"][0]

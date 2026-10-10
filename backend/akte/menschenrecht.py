@@ -10,6 +10,7 @@ und veröffentlichen tut ein Mensch, der dafür geradesteht.
 
 from __future__ import annotations
 
+from django.conf import settings
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import APIException, PermissionDenied
@@ -33,22 +34,54 @@ def _status_von(daten: dict) -> str | None:
     return str(wert) if wert is not None else None
 
 
+def _mit_unterschrift() -> bool:
+    return bool(getattr(settings, "AKTE_BEWEISSCHICHT", True) and getattr(settings, "AKTE_SIGNIERTE_FREIGABE", True))
+
+
+UNTERSCHRIFT = ("Freigeben heißt unterschreiben: in der Oberfläche „Freigeben“ wählen "
+                "(API: /api/v1/akte/beweis/freigabe/vorbereiten/ und /abschliessen/).")
+
+
 def pruefe_anlegen(request, modell, daten: dict) -> dict:
     """Vor dem Anlegen: Werkzeuge legen nur Entwürfe an und schalten nichts öffentlich."""
     if not per_werkzeug(request):
+        if _mit_unterschrift() and _status_von(daten) == Status.FREIGEGEBEN:
+            raise Konflikt(UNTERSCHRIFT)
         return {}
     gewuenscht = _status_von(daten)
     if gewuenscht not in (None, Status.ENTWURF):
         raise PermissionDenied("Werkzeuge legen nur Entwürfe an. Freigeben tut ein Mensch in der Oberfläche.")
     if daten.get("oeffentlich"):
         raise PermissionDenied("Ein Board öffentlich schalten darf nur ein Mensch in der Oberfläche.")
+    if daten.get("regeln"):
+        raise PermissionDenied("Die Prüfregeln eines Boards ändert nur ein Mensch in der Oberfläche.")
     return {"status": Status.ENTWURF} if _hat_status(modell) else {}
 
 
+def nach_aenderung(objekt) -> bool:
+    """Nach dem Speichern: Weicht ein freigegebenes Objekt vom unterschriebenen Inhalt ab, ist es wieder Entwurf.
+    Gibt True zurück, wenn der Status zurückgesetzt wurde."""
+    from .beweisschicht import veraendert_seit_freigabe
+    from .models import Entitaet, Verbindung
+
+    art = "faden" if isinstance(objekt, Verbindung) else "karte" if isinstance(objekt, Entitaet) else ""
+    if art and getattr(objekt, "status", None) == Status.FREIGEGEBEN and veraendert_seit_freigabe(objekt, art):
+        type(objekt).objects.filter(pk=objekt.pk).update(status=Status.ENTWURF)
+        objekt.status = Status.ENTWURF
+        return True
+    return False
+
+
 def pruefe_aendern(request, instanz, daten: dict) -> None:
-    """Vor dem Ändern: Freigegebenes bleibt für Werkzeuge gesperrt, der Status ist Menschensache."""
+    """Vor dem Ändern: Freigegebenes bleibt für Werkzeuge gesperrt, der Status ist Menschensache, und auch ein
+    Mensch gibt nur mit Unterschrift frei."""
     if not per_werkzeug(request):
+        if (_mit_unterschrift() and _status_von(daten) == Status.FREIGEGEBEN
+                and getattr(instanz, "status", None) != Status.FREIGEGEBEN):
+            raise Konflikt(UNTERSCHRIFT)
         return
+    if "regeln" in daten:
+        raise PermissionDenied("Die Prüfregeln eines Boards ändert nur ein Mensch in der Oberfläche.")
     if getattr(instanz, "status", None) == Status.FREIGEGEBEN:
         raise Konflikt()
     gewuenscht = _status_von(daten)

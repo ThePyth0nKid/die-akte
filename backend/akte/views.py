@@ -61,7 +61,8 @@ from .permissions import (
     lese_boards,
     mitglieder_boards,
 )
-from .pruefung import pruefe_verbindung
+from .pruefung import darf_oeffentlich, pruefe_verbindung, sperrende
+from .regeln import uebersicht as regeln_uebersicht
 from .serializers import (
     BeweisSerializer,
     BoardSerializer,
@@ -83,7 +84,7 @@ from .verlauf import protokolliere
 
 def _faeden_qs():
     return Verbindung.objects.select_related("von", "nach").prefetch_related(
-        "belege__quelle__sicherungen__beleg"
+        "belege__quelle__sicherungen__beleg", "ueberstimmungen"
     )
 
 
@@ -116,6 +117,8 @@ class MitVerlauf(Redaktion):
         try:
             with transaction.atomic():
                 obj = serializer.save()
+                if menschenrecht.nach_aenderung(obj):
+                    protokolliere(obj, "zurueck_auf_entwurf", self.request.user)
                 protokolliere(obj, "geaendert", self.request.user)
         except IntegrityError:
             raise ValidationError("Konflikt beim Speichern. Bitte neu laden.") from None
@@ -906,10 +909,12 @@ class PruefungView(Redaktion, APIView):
         ids = board.karten.values_list("entitaet_id", flat=True)
         ergebnis = []
         for v in _faeden_qs().filter(von_id__in=ids, nach_id__in=ids):
-            befunde = pruefe_verbindung(v)
-            ergebnis.append({"id": v.id, "titel": str(v), "ok": not befunde,
-                             "befunde": [{"code": b.code, "text": b.text} for b in befunde]})
-        return Response({"faeden": ergebnis, "alle_ok": all(f["ok"] for f in ergebnis)})
+            befunde = pruefe_verbindung(v, board)
+            ergebnis.append({"id": v.id, "titel": str(v), "ok": not sperrende(befunde),
+                             "befunde": [{"code": b.code, "text": b.text, "schwere": b.schwere,
+                                          "ueberstimmt": b.ueberstimmt} for b in befunde]})
+        return Response({"faeden": ergebnis, "alle_ok": all(f["ok"] for f in ergebnis),
+                         "regeln": regeln_uebersicht(board)})
 
 
 class AufraeumenView(Redaktion, APIView):
@@ -1104,7 +1109,7 @@ class OeffentlicheWandView(APIView):
         ausgeblendet = set(board.ausgeblendete_verbindungen.values_list("id", flat=True))
         faeden = [
             v for v in _faeden_qs().filter(von_id__in=ids, nach_id__in=ids).exclude(id__in=ausgeblendet)
-            if not pruefe_verbindung(v)
+            if darf_oeffentlich(v, board)
         ]
         # Kennungen gelten nur innerhalb dieser Antwort. Die internen IDs sind über alle
         # Boards gleich; öffentlich würden sie eine verdeckte Person wiedererkennbar machen.

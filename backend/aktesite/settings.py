@@ -181,6 +181,15 @@ AKTE_EINSPIELER_WURZELN = _liste("AKTE_EINSPIELER_WURZELN", "", ";")
 AKTE_ABRUF_KENNUNG = os.environ.get(
     "AKTE_ABRUF_KENNUNG", "Die-Akte/0.1 (+https://github.com/ThePyth0nKid/die-akte)"
 )
+# Beweisschicht: Sicherungen und Freigaben als signierte, verkettete Ereignisse (akte/beweisschicht.py).
+AKTE_BEWEISSCHICHT = _schalter("AKTE_BEWEISSCHICHT", True)
+# Freigeben nur mit Unterschrift eines Menschen (sonst darf die Oberfläche den Status direkt setzen).
+AKTE_SIGNIERTE_FREIGABE = _schalter("AKTE_SIGNIERTE_FREIGABE", True)
+# Geräteschlüssel dieser Installation (Standard: daten/schluessel/geraet_ed25519.pem, Rechte 600).
+AKTE_GERAETESCHLUESSEL = os.environ.get("AKTE_GERAETESCHLUESSEL", "")
+# Stufen der Prüfregeln für alle Boards, z. B. {"quelle_ohne_archiv": "sperrt"} (akte/regeln.py).
+AKTE_REGELN = os.environ.get("AKTE_REGELN", "")
+
 # Echte Besucher-IP für die Drossel ohne Konto (permissions.AkteOeffentlichThrottle.get_ident):
 # Kopf eines vorgeschalteten Dienstes (z. B. CF-Connecting-IP) und/oder Zahl der eigenen Proxys vor der API.
 AKTE_CLIENT_IP_HEADER = os.environ.get("AKTE_CLIENT_IP_HEADER", "")
@@ -195,6 +204,9 @@ if os.environ.get("AKTE_TESTLAUF") == "1":
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
     REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = []
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+    import tempfile as _tempfile
+
+    AKTE_GERAETESCHLUESSEL = str(Path(_tempfile.mkdtemp(prefix="akte-test-")) / "geraet_ed25519.pem")
 
 LOGGING = {
     "version": 1,

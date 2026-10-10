@@ -1,4 +1,4 @@
-# Die Akte – Backend (Django, Gunicorn). Läuft als Nicht-Root-Nutzer.
+# Die Akte – Backend (Django, Gunicorn). Bau-Kontext ist die Wurzel des Repos (wegen beweis/).
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,10 +7,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     AKTE_DATEN=/daten
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+COPY backend/requirements.txt /tmp/requirements.txt
+COPY beweis /tmp/beweis
+RUN pip install -r /tmp/requirements.txt /tmp/beweis
 
-COPY . .
+COPY backend/ .
 RUN useradd --create-home --uid 1000 akte \
     && mkdir -p /daten \
     && chown -R akte:akte /daten /app
