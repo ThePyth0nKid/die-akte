@@ -144,7 +144,8 @@ class BelegSerializer(serializers.ModelSerializer):
 def _fundstelle_anstossen(beleg_id: int) -> None:
     from django.conf import settings
 
-    if getattr(settings, "AKTE_BROWSER_AKTIV", True) and getattr(settings, "AKTE_SICHERUNG_AKTIV", True):
+    # PDF-Fundstellen brauchen keinen Browser (pdfium); ob eine Webseite fotografiert wird, entscheidet die Aufgabe.
+    if getattr(settings, "AKTE_SICHERUNG_AKTIV", True):
         from .tasks import fundstelle_sichern
 
         transaction.on_commit(lambda: fundstelle_sichern.delay(beleg_id))

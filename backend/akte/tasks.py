@@ -46,8 +46,10 @@ def fundstelle_sichern(beleg_id: int) -> None:
     from .models import Beleg
     from .sicherung import fundstelle_jetzt
 
+    from django.conf import settings
+
     beleg = Beleg.objects.select_related("quelle").filter(pk=beleg_id).first()
-    if beleg and fundstelle_jetzt(beleg) == "browser":
+    if beleg and fundstelle_jetzt(beleg) == "browser" and getattr(settings, "AKTE_BROWSER_AKTIV", False):
         fundstelle_browser.delay(beleg_id)
 
 
