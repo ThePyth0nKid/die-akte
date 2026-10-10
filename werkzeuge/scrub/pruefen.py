@@ -8,8 +8,9 @@ Zwei Regelsätze:
                 ``$OSS_SCRUB_SPERRLISTE`` (Pfad), ``$OSS_SCRUB_SPERRLISTE_INHALT`` (Inhalt, z. B. aus einem CI-Secret),
                 ``~/.config/oss-scrub/sperrliste.txt``.
 
-Format beider Listen: eine Regex je Zeile, ``#`` = Kommentar, Groß-/Kleinschreibung egal.
-Präfix ``CS:`` = mit Groß-/Kleinschreibung.
+Format beider Listen: eine Regex je Zeile, ``#`` = Kommentar, Groß-/Kleinschreibung egal (auch bei Umlauten).
+Präfix ``CS:`` = mit Groß-/Kleinschreibung. Präfix ``HART:`` = gilt auch in Zeilen mit ``scrub:erlaubt`` (für
+Schlüsselmuster: ein echter Schlüssel lässt sich nicht wegmarkieren). Beide Präfixe lassen sich kombinieren.
 
 Treffer privater Regeln werden nie im Wortlaut ausgegeben (sonst stünde die Sperrliste im CI-Log), auch nicht über den
 Dateinamen: Trifft eine private Regel einen Pfad, erscheint der Pfad nur verdeckt. Ausnahme: ``--zeigen`` auf dem
@@ -18,9 +19,13 @@ eigenen Rechner.
 Eine Zeile mit ``scrub:erlaubt`` ist von ÖFFENTLICHEN Regeln ausgenommen; private Regeln gelten immer.
 
 Im Zweifel ein Fund: Was sich nicht lesen lässt oder zu groß ist, gilt als nicht geprüft und lässt die Prüfung
-scheitern (Grenze ``--max-mb``). UTF-16-Dateien werden umkodiert, Text zusätzlich in Unicode-NFC geprüft (ein „ü“
-aus u + Trema trifft dieselbe Regel wie ein fertiges „ü“). ``--historie`` verweigert flache Klone, denn dort fehlt
-Historie.
+scheitern (Grenze ``--max-mb``), ebenso verlinkte Ordner bei ``--pfad``. UTF-16 (auch ohne BOM) und Windows-1252
+werden umkodiert, Text zusätzlich in Unicode-NFC geprüft (ein „ü“ aus u + Trema trifft dieselbe Regel wie ein
+fertiges „ü“). ZIP-Container (auch DOCX, XLSX, PPTX) werden Datei für Datei geprüft. ``--historie`` prüft auch Tags
+und verweigert flache Klone, denn dort fehlt Historie.
+
+Nicht geprüft werden komprimierte PDF-Inhalte, Base64 und Git-LFS-Objekte (nur deren Zeiger). Für solche Dateien
+gilt: vor dem Commit selbst ansehen.
 
 Aufrufe:
   pruefen.py --staged                 # vor dem Commit (Git-Hook)
@@ -32,11 +37,13 @@ Aufrufe:
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import re
 import subprocess
 import sys
 import unicodedata
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,13 +56,16 @@ MAX_MB = 50
 @dataclass(frozen=True)
 class Regel:
     nummer: int
-    muster: re.Pattern[bytes]
+    muster: re.Pattern[str]
     privat: bool
     quelle: str
+    #: Gilt auch in Zeilen mit ``scrub:erlaubt``.
+    hart: bool = False
 
 
 #: Pseudo-Regel für alles, was nicht geprüft werden konnte (zu groß, unlesbar).
-UNGEPRUEFT = Regel(0, re.compile(b"(?!)"), False, "nicht geprüft")
+UNGEPRUEFT = Regel(0, re.compile("(?!)"), False, "nicht geprüft")
+ZIP_MAX_DATEIEN = 2000
 
 
 @dataclass(frozen=True)
@@ -72,17 +82,19 @@ def _regeln_lesen(text: str, privat: bool, quelle: str) -> list[Regel]:
         zeile = roh.strip().lstrip("﻿")
         if not zeile or zeile.startswith("#"):
             continue
-        flags = re.IGNORECASE
-        if zeile.startswith("CS:"):
-            zeile = zeile[3:]
-            flags = 0
+        flags, hart = re.IGNORECASE, False
+        while zeile.startswith(("CS:", "HART:")):
+            if zeile.startswith("CS:"):
+                zeile, flags = zeile[3:], 0
+            else:
+                zeile, hart = zeile[5:], True
         try:
-            muster = re.compile(unicodedata.normalize("NFC", zeile).encode("utf-8"), flags)
+            muster = re.compile(unicodedata.normalize("NFC", zeile), flags)
         except re.error as fehler:
             # Bei der privaten Liste keine Musterteile ausgeben (die Meldung landet sonst im CI-Log).
             grund = "" if privat else f": {fehler}"
             raise SystemExit(f"Regel {quelle}:{nr} ist keine gültige Regex{grund}") from None
-        regeln.append(Regel(nr, muster, privat, quelle))
+        regeln.append(Regel(nr, muster, privat, quelle, hart))
     return regeln
 
 
@@ -96,7 +108,9 @@ def regeln_laden(nur_oeffentlich: bool = False) -> tuple[list[Regel], bool]:
         return regeln, False
     inhalt = None
     pfad = os.environ.get("OSS_SCRUB_SPERRLISTE")
-    if pfad and Path(pfad).is_file():
+    if pfad:
+        if not Path(pfad).is_file():
+            raise SystemExit("OSS_SCRUB_SPERRLISTE zeigt auf keine Datei. Pfad prüfen oder Variable entfernen.")
         inhalt = _text_lesen(Path(pfad))
     elif os.environ.get("OSS_SCRUB_SPERRLISTE_INHALT"):
         inhalt = os.environ["OSS_SCRUB_SPERRLISTE_INHALT"]
@@ -109,11 +123,28 @@ def regeln_laden(nur_oeffentlich: bool = False) -> tuple[list[Regel], bool]:
     return regeln + _regeln_lesen(inhalt, True, "privat"), True
 
 
-def _fassungen(daten: bytes) -> list[bytes]:
-    """Die Bytes, so wie sie sind, und dieselben Zeichen in UTF-8-NFC (aus UTF-16 umkodiert bzw. normalisiert)."""
+def _utf16_ohne_bom(daten: bytes) -> str | None:
+    """UTF-16 ohne BOM erkennen: in Text aus lateinischen Zeichen ist jedes zweite Byte eine Null."""
+    probe = daten[:4096]
+    if len(probe) < 8 or probe.count(0) < len(probe) // 4:
+        return None
+    gerade, ungerade = probe[0::2].count(0), probe[1::2].count(0)
+    if ungerade > len(probe) // 4 and gerade < ungerade // 8:
+        return daten.decode("utf-16-le", "replace")
+    if gerade > len(probe) // 4 and ungerade < gerade // 8:
+        return daten.decode("utf-16-be", "replace")
+    return None
+
+
+def _fassungen(daten: bytes) -> list[str]:
+    """Die Bytes Zeichen für Zeichen (Latin-1, damit Schlüsselmuster auch in Binärdateien treffen) und derselbe Inhalt
+    als Text in Unicode-NFC (aus UTF-8, UTF-16 oder Windows-1252)."""
+    roh = daten.decode("latin-1")
     text = None
     if daten[:2] in (b"\xff\xfe", b"\xfe\xff"):
         text = daten.decode("utf-16", "replace")
+    elif (utf16 := _utf16_ohne_bom(daten)) is not None:
+        text = utf16
     elif daten[:3] == b"\xef\xbb\xbf" or not daten.isascii():
         try:
             text = daten.decode("utf-8-sig")
@@ -121,24 +152,49 @@ def _fassungen(daten: bytes) -> list[bytes]:
             # Kein UTF-8: als Windows-1252 lesen, damit Regeln mit Umlauten auch alte Dateien treffen.
             text = daten.decode("cp1252", "replace")
     if text is None:
-        return [daten]
-    normal = unicodedata.normalize("NFC", text).encode("utf-8")
-    return [daten] if normal == daten else [daten, normal]
+        return [roh]
+    normal = unicodedata.normalize("NFC", text)
+    return [roh] if normal == roh else [roh, normal]
 
 
-def _pruefe_bytes(ort: str, daten: bytes, regeln: list[Regel]) -> list[Fund]:
+def _pruefe_zip(ort: str, daten: bytes, regeln: list[Regel], max_bytes: int) -> list[Fund] | None:
+    """ZIP-Container (auch DOCX, XLSX, PPTX) Datei für Datei; None, wenn es kein lesbares ZIP ist."""
+    try:
+        archiv = zipfile.ZipFile(io.BytesIO(daten))
+        eintraege = [e for e in archiv.infolist() if not e.is_dir()]
+    except (zipfile.BadZipFile, OSError, ValueError):
+        return None
+    if len(eintraege) > ZIP_MAX_DATEIEN or sum(e.file_size for e in eintraege) > max_bytes:
+        return [_ungeprueft(ort, "ZIP-Inhalt zu groß")]
     funde: list[Fund] = []
+    for e in eintraege:
+        innen = f"{ort}!{e.filename}"
+        funde += _pruefe_name(innen, regeln)
+        try:
+            funde += _pruefe_bytes(innen, archiv.read(e), regeln, max_bytes, tiefe=1)
+        except (zipfile.BadZipFile, OSError, RuntimeError, NotImplementedError) as fehler:
+            funde.append(_ungeprueft(innen, f"unlesbar ({type(fehler).__name__})"))
+    return funde
+
+
+def _pruefe_bytes(ort: str, daten: bytes, regeln: list[Regel], max_bytes: int = MAX_MB * 1024 * 1024,
+                  tiefe: int = 0) -> list[Fund]:
+    funde: list[Fund] = []
+    if tiefe == 0 and daten[:4] == b"PK\x03\x04":
+        innen = _pruefe_zip(ort, daten, regeln, max_bytes)
+        if innen is not None:
+            funde += innen
     gesehen: set[tuple[int, str, int]] = set()
     for fassung in _fassungen(daten):
         for zeilen_nr, zeile in enumerate(fassung.splitlines(), start=1):
-            erlaubt = ERLAUBT_MARKE.encode() in zeile
+            erlaubt = ERLAUBT_MARKE in zeile
             for regel in regeln:
-                if erlaubt and not regel.privat:
+                if erlaubt and not regel.privat and not regel.hart:
                     continue
                 m = regel.muster.search(zeile)
                 if m and (zeilen_nr, regel.quelle, regel.nummer) not in gesehen:
                     gesehen.add((zeilen_nr, regel.quelle, regel.nummer))
-                    funde.append(Fund(ort, zeilen_nr, regel, m.group(0).decode("utf-8", "replace")))
+                    funde.append(Fund(ort, zeilen_nr, regel, m.group(0)))
     return funde
 
 
@@ -146,10 +202,10 @@ def _pruefe_name(name: str, regeln: list[Regel]) -> list[Fund]:
     funde, gesehen = [], set()
     for fassung in {name, unicodedata.normalize("NFC", name)}:
         for r in regeln:
-            m = r.muster.search(fassung.encode("utf-8"))
+            m = r.muster.search(fassung)
             if m and (r.quelle, r.nummer) not in gesehen:
                 gesehen.add((r.quelle, r.nummer))
-                funde.append(Fund(name, 0, r, m.group(0).decode("utf-8", "replace")))
+                funde.append(Fund(name, 0, r, m.group(0)))
     return funde
 
 
@@ -170,18 +226,20 @@ def dateien_pruefen(pfade: list[Path], basis: Path, regeln: list[Regel], max_mb:
             if pfad.stat().st_size > max_mb * 1024 * 1024:
                 funde.append(_ungeprueft(name, f"größer als {max_mb} MB"))
                 continue
-            funde += _pruefe_bytes(name, pfad.read_bytes(), regeln)
+            funde += _pruefe_bytes(name, pfad.read_bytes(), regeln, max_mb * 1024 * 1024)
         except OSError as fehler:
             funde.append(_ungeprueft(name, f"unlesbar ({type(fehler).__name__})"))
     return funde
 
 
 def ordner_dateien(ordner: Path, ohne: set[str] | None = None) -> list[Path]:
-    """Alle Dateien unter ``ordner`` außer ``.git`` und ausdrücklich genannten Ordnernamen."""
+    """Alle Dateien unter ``ordner`` außer ``.git`` und ausdrücklich genannten Ordnernamen. Verlinkte Ordner kommen
+    als Eintrag mit; lesen lassen sie sich nicht, also werden sie zum Fund „nicht geprüft“."""
     weg = {".git"} | set(ohne or ())
     ergebnis = []
     for wurzel, verzeichnisse, dateien in os.walk(ordner):
         verzeichnisse[:] = [v for v in verzeichnisse if v not in weg]
+        ergebnis += [Path(wurzel) / v for v in verzeichnisse if (Path(wurzel) / v).is_symlink()]
         ergebnis += [Path(wurzel) / d for d in dateien]
     return sorted(ergebnis)
 
@@ -203,7 +261,7 @@ def staged_pruefen(regeln: list[Regel], max_mb: int = MAX_MB) -> list[Fund]:
         if len(daten) > max_mb * 1024 * 1024:
             funde.append(_ungeprueft(name, f"größer als {max_mb} MB"))
             continue
-        funde += _pruefe_bytes(name, daten, regeln)
+        funde += _pruefe_bytes(name, daten, regeln, max_mb * 1024 * 1024)
     return funde
 
 
@@ -243,6 +301,11 @@ def historie_pruefen(regeln: list[Regel], max_mb: int = MAX_MB) -> list[Fund]:
         raise SystemExit("Flacher Klon: Die Historie ist unvollständig. Erst `git fetch --unshallow` "
                          "(in GitHub Actions: fetch-depth: 0).")
     funde: list[Fund] = []
+    # Tags: Name, Verfasser und Nachricht annotierter Tags
+    tags = _git("for-each-ref", "--format=%(refname)%0a%(taggername) %(taggeremail)%0a%(contents)", "refs/tags",
+                cwd=wurzel)
+    if tags.strip():
+        funde += _pruefe_bytes("tags", tags, regeln)
     erster_ort: dict[str, str] = {}  # Blob → erster Ort (commit:name), damit jeder Blob nur einmal gelesen wird
     namen_gesehen: set[str] = set()
     for commit in _git("rev-list", "--all", cwd=wurzel).decode().split():

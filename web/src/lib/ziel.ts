@@ -15,7 +15,9 @@ export function sicheresZiel(ziel: string | null): string {
   try {
     const url = new URL(ziel, PLATZHALTER)
     if (url.origin !== PLATZHALTER) return STANDARD
-    return url.pathname + url.search + url.hash
+    const ergebnis = url.pathname + url.search + url.hash
+    // Punktsegmente lösen sich auf: aus „/.//x“ oder „/a/..//x“ wird „//x“, und das wäre wieder eine fremde Seite.
+    return ergebnis.startsWith("//") ? STANDARD : ergebnis
   } catch {
     return STANDARD
   }

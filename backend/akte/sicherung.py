@@ -18,7 +18,7 @@ import html
 import logging
 import re
 import time
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 import requests
 from django.conf import settings
@@ -179,12 +179,24 @@ def _vorhandener_schnappschuss(url: str) -> str:
     return naechster.get("url", "").replace("http://web.archive.org", "https://web.archive.org") if naechster.get("available") else ""
 
 
+def _zugangs_parameter(name: str) -> bool:
+    """Sieht der Query-Parameter nach Zugang aus (signierter Link, Sitzung, Schlüssel)? Dann nie an archive.org."""
+    n = name.lower()
+    if any(t in n for t in ("token", "signature", "secret", "passw", "session", "credential", "x-amz-", "ticket")):
+        return True
+    return n in {"key", "sig", "auth", "otp", "expires"} or n.endswith(("apikey", "_key", "-key", "_sig")) \
+        or n.startswith("auth")
+
+
 def _archiv_verweigert(url: str) -> str:
     """Warum diese Adresse nicht an archive.org geht (leer = sie darf). archive.org bekommt die URL und macht sie
     öffentlich: keine Zugangsdaten in der Adresse, nichts aus dem eigenen Netz."""
     teile = urlsplit(url)
     if teile.username or teile.password:
         return "Die Adresse enthält Zugangsdaten und geht nicht an archive.org."
+    heikel = [k for k, _ in parse_qsl(teile.query, keep_blank_values=True) if _zugangs_parameter(k)]
+    if heikel:
+        return f"Die Adresse trägt einen Zugangs-Parameter ({heikel[0][:30]}) und geht nicht an archive.org."
     try:
         pruefe_url(url)
     except AbrufFehler as fehler:

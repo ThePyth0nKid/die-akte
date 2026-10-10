@@ -67,6 +67,7 @@ export const akte = {
     anfrage<Board>(`/boards/${slug}/`, json("PATCH", daten)),
   wand: (slug: string) => lesen<Wand>(`/boards/${slug}/`),
   pruefung: (slug: string) => anfrage<Pruefung>(`/boards/${slug}/pruefung/`),
+  lesevorschau: (slug: string) => anfrage<Wand>(`/boards/${slug}/lesevorschau/`),
 
   suchen: (q: string) => anfrage<EntitaetKurz[]>(`/entitaeten/?q=${encodeURIComponent(q)}`),
   entitaet: (id: number) => anfrage<EntitaetDetail>(`/entitaeten/${id}/`),

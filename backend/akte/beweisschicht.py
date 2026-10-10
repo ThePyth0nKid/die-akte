@@ -164,7 +164,7 @@ def geraeteschluessel() -> tuple[str, Ed25519PrivateKey]:
     privat = _schluessel_laden(datei)
     roh = oeffentlicher_schluessel(privat)
     fp = fingerabdruck(roh)
-    kid = f"akte-geraet:{fp}"
+    kid = f"akte-geraet:{kennung(roh)}"
     s, _ = Schluessel.objects.get_or_create(kid=kid, defaults={"rolle": SchluesselRolle.GERAET, "oeffentlich": b64url(roh),
                                                                "fingerabdruck": fp})
     if s.oeffentlich != b64url(roh):
@@ -172,6 +172,13 @@ def geraeteschluessel() -> tuple[str, Ed25519PrivateKey]:
     if s.widerrufen_am:
         raise BeweisFehler("Der Geräteschlüssel ist widerrufen. Datei entfernen, dann entsteht ein neuer.", 500)
     return kid, privat
+
+
+def kennung(oeffentlich: bytes) -> str:
+    """Teil der Schlüssel-ID: 128 Bit des SHA-256 (der kürzere Fingerabdruck dient nur zum Vorlesen)."""
+    import hashlib
+
+    return hashlib.sha256(oeffentlich).hexdigest()[:32]
 
 
 # ─── Kette ───────────────────────────────────────────────────────────────────
@@ -343,7 +350,7 @@ def schluessel_anmelden(nutzer, oeffentlich_b64: str) -> Schluessel:
     if len(roh) != 32:
         raise BeweisFehler("Ein Ed25519-Schlüssel hat 32 Byte.")
     fp = fingerabdruck(roh)
-    kid = f"akte-mensch:{fp}"
+    kid = f"akte-mensch:{kennung(roh)}"
     schluessel, neu = Schluessel.objects.get_or_create(kid=kid, defaults={
         "rolle": SchluesselRolle.MENSCH, "nutzer": nutzer, "oeffentlich": b64url(roh), "fingerabdruck": fp})
     if not neu and (schluessel.nutzer_id != nutzer.pk or schluessel.widerrufen_am):

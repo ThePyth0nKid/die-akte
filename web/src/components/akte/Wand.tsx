@@ -1189,7 +1189,10 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
       )}
 
       {befehl && <Befehlszeile schliessen={() => setBefehl(false)} gewaehlt={(e) => karteHolen(e)} />}
-      {regelnOffen && <RegelnDialog slug={slug} schliessen={() => setRegelnOffen(false)} geaendert={() => laden()} />}
+      {regelnOffen && (
+        <RegelnDialog slug={slug} oeffentlich={Boolean(wand?.board.oeffentlich)} schliessen={() => setRegelnOffen(false)}
+          geaendert={() => laden()} />
+      )}
 
       {fadenDialog && (
         <FadenFormular

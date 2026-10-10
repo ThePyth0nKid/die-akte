@@ -20,7 +20,8 @@ mehr wollen: Seitenbilder von Webseiten, Postgres, Zugriff für ein Team.
 | `COOKIE_SECURE` | `true`, sobald die Akte über HTTPS läuft |
 | `AKTE_BROWSER_AKTIV` | Seitenbilder und Fundstellen in Webseiten (braucht Chromium, siehe unten) |
 | `AKTE_ABRUF_KENNUNG` | Kennung beim Abruf fremder Seiten, bitte mit Kontaktadresse deiner Instanz |
-| `AKTE_CLIENT_IP_HEADER`, `AKTE_VERTRAUTE_PROXYS` | echte Besucher-IP hinter einem Proxy |
+| `AKTE_CLIENT_IP_HEADER`, `AKTE_VERTRAUTE_PROXYS` | echte Besucher-IP hinter einem Proxy (Docker: 1 für Caddy) |
+| `AKTE_DROSSEL_ANON`, `AKTE_DROSSEL_LOGIN`, `AKTE_DROSSEL_LOGIN_KONTO`, `AKTE_DROSSEL_EXPORT` | Drosseln, z. B. `10/min` |
 
 ## Seitenbilder und Webseiten-Fundstellen
 
@@ -51,6 +52,7 @@ docker compose exec api python manage.py akte_demo [--neu] [--oeffentlich]
 docker compose exec api python manage.py akte_schwaerzen --faden <id>   # Inhalt aus der Kette schwärzen
 ```
 
+Beim Start räumt der Container abgelaufene Einträge der Sitzungs-Sperrliste auf (`flushexpiredtokens`).
 `--admin` gibt zusätzlich Zugang zur Django-Verwaltung. Über den Eingang (Caddy) ist `/admin` bewusst nicht
 erreichbar; wer sie braucht, startet das Backend ohne Docker (`manage.py runserver`) auf dem eigenen Rechner.
 

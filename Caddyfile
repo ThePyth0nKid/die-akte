@@ -17,6 +17,13 @@
 	# docker compose exec api python manage.py … oder eine eigene, nur lokale Route.
 	@backend path /api/v1/* /static/*
 	handle @backend {
+		# API und Verwaltungs-Dateien: eigene, strenge Richtlinie (nur eigene Dateien, keine Rahmen). Die Beweis-Dateien
+		# bringen ihre noch strengere CSP selbst mit (sandbox), deshalb auch hier nur setzen, wo keine da ist.
+		header {
+			?Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+			?Permissions-Policy "camera=(), microphone=(), geolocation=()"
+			defer
+		}
 		reverse_proxy api:8000
 	}
 

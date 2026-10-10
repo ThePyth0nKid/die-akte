@@ -15,6 +15,7 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -146,12 +147,25 @@ class WiderrufAbschliessenView(_Mensch):
         return Response({"event_id": e.event_id, "event_hash": e.event_hash, "position": e.position}, status=201)
 
 
+class ExportDrossel(AnonRateThrottle):
+    """Besucher ohne Konto: Der Export ist teuer, wenn der Cache gerade ungültig ist."""
+
+    scope = "akte_export"
+
+    def get_rate(self):
+        return self.THROTTLE_RATES.get(self.scope, "10/min")
+
+
 class ExportView(APIView):
     """Die ganze Kette mit Schlüsselbündel. Offenlegung: Redaktion alles, Besucher nur Öffentliches (fünf Minuten im
-    Cache, jede Änderung macht ihn ungültig)."""
+    Cache, jede Änderung macht ihn ungültig).
+
+    Der Trace enthält immer alle Ereignisse (Zeit, Art, Schlüssel), auch zu nicht öffentlichen Objekten: Nur die
+    ganze Kette lässt sich auf Lücken prüfen. Inhalte stehen dort nur als Zusage."""
 
     authentication_classes = [JWTAuthentication, TokenAuthentication]
     permission_classes = [AllowAny]
+    throttle_classes = [ExportDrossel]
 
     def get(self, request):
         if not getattr(settings, "AKTE_BEWEISSCHICHT", True):
@@ -203,6 +217,7 @@ def _oeffentlich_offenlegbar():
             quellen.update(b.quelle_id for b in v.belege.all())
 
     offen.update(Ereignis.objects.filter(typ="akte.sicherung", sicherung__quelle_id__in=quellen)
+                 .exclude(sicherung__art="video_lokal")  # ältere Ketten: lokaler Pfad, vom Server nie gesehen
                  .values_list("pk", flat=True))
     return lambda ereignis: ereignis.pk in offen
 

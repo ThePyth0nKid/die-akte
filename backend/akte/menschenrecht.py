@@ -61,6 +61,10 @@ def pruefe_anlegen(request, modell, daten: dict) -> dict:
         raise PermissionDenied("Ein Board öffentlich schalten darf nur ein Mensch in der Oberfläche.")
     if daten.get("regeln"):
         raise PermissionDenied("Die Prüfregeln eines Boards ändert nur ein Mensch in der Oberfläche.")
+    from .permissions import mitglieder_boards
+
+    if modell.__name__ == "Board" and daten.get("slug") in mitglieder_boards():
+        raise PermissionDenied("Diese Kennung ist für ein Mitglieder-Board vorgesehen; anlegen tut es ein Mensch.")
     return {"status": Status.ENTWURF} if _hat_status(modell) else {}
 
 

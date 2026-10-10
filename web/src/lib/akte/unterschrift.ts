@@ -226,15 +226,38 @@ export function begruendungsFrage(b: FehlendeBegruendung): string {
   return `Sperrender Befund: ${b.text}\n\nBegründung, warum du ihn überstimmst.\n${HINWEIS_VEROEFFENTLICHUNG}`
 }
 
-/** Text für die Bestätigung: Was genau wird unterschrieben? */
+type BelegInhalt = {
+  quelle?: { titel?: string; url?: string; archiv_url?: string; herausgeber?: string }
+  zitat_woertlich?: string
+  fundstelle?: string
+  original_sha256?: string
+}
+
+const kurz = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1)}…` : text)
+const BELEGE_MAX = 6
+
+/** Text für die Bestätigung: Was genau wird unterschrieben? Jeder Beleg mit Quelle, Archiv, Zitat und Kopie, denn
+ * genau diese Angaben deckt die Unterschrift. */
 export function zusammenfassung(v: Vorbereitung): string {
   const zeilen = ["Du unterschreibst diese Freigabe mit deinem Schlüssel:", ""]
   for (const [k, w] of Object.entries(v.inhalt)) {
-    if (k === "belege" && Array.isArray(w)) zeilen.push(`belege: ${w.length}`)
-    else if (w !== null && w !== "" && typeof w !== "object") zeilen.push(`${k}: ${String(w)}`)
+    if (w !== null && w !== "" && typeof w !== "object") zeilen.push(`${k}: ${kurz(String(w), 200)}`)
   }
+  const belege = Array.isArray(v.inhalt.belege) ? (v.inhalt.belege as BelegInhalt[]) : []
+  if (belege.length) zeilen.push("", `belege: ${belege.length}`)
+  belege.slice(0, BELEGE_MAX).forEach((b, i) => {
+    const q = b.quelle ?? {}
+    zeilen.push(`  ${i + 1}. ${kurz(q.titel || "(ohne Titel)", 80)}${q.url ? ` – ${kurz(q.url, 100)}` : ""}`)
+    if (q.archiv_url) zeilen.push(`     Archiv: ${kurz(q.archiv_url, 100)}`)
+    zeilen.push(`     Zitat: ${b.zitat_woertlich ? `„${kurz(b.zitat_woertlich, 160)}“` : "(kein Wortlaut)"}`)
+    if (b.original_sha256) zeilen.push(`     Kopie: SHA-256 ${b.original_sha256.slice(0, 16)}…`)
+  })
+  if (belege.length > BELEGE_MAX) zeilen.push(`  … und ${belege.length - BELEGE_MAX} weitere`)
   if (v.hinweise_offen.length) zeilen.push("", `Offene Hinweise: ${v.hinweise_offen.join(", ")}`)
-  if (v.ueberstimmungen.length) zeilen.push("", `Überstimmt: ${v.ueberstimmungen.map((u) => u.code).join(", ")}`)
+  if (v.ueberstimmungen.length) {
+    zeilen.push("", "Überstimmt (die Begründung wird veröffentlicht):")
+    for (const u of v.ueberstimmungen) zeilen.push(`  ${u.code}: ${kurz(u.begruendung, 160)}`)
+  }
   zeilen.push("", HINWEIS_VEROEFFENTLICHUNG, `Ereignis ${v.event_hash.slice(0, 16)}…`)
   return zeilen.join("\n")
 }

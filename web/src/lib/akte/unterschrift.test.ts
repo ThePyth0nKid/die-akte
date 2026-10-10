@@ -26,7 +26,7 @@ describe("zusammenfassung", () => {
     expect(text).toContain("von: Senat Musterhafen")
     expect(text).toContain("belege: 2")
     expect(text).toContain("Offene Hinweise: ohne_start")
-    expect(text).toContain("Überstimmt: quelle_ohne_archiv")
+    expect(text).toContain("quelle_ohne_archiv: …")
     expect(text).not.toContain("ende:")
   })
 })
@@ -43,5 +43,21 @@ describe("Veröffentlichung und Wiederholung", () => {
     expect(ketteVeraendert(new AkteFehler(409, { kette_veraendert: true }))).toBe(true)
     expect(ketteVeraendert(new AkteFehler(409, { detail: "Inhalt geändert" }))).toBe(false)
     expect(ketteVeraendert(new Error("x"))).toBe(false)
+  })
+})
+
+describe("zusammenfassung zeigt, was unterschrieben wird", () => {
+  it("jeden Beleg mit Quelle, Archiv, Zitat und Kopie", () => {
+    const v: Vorbereitung = {
+      event_id: "", signing_input: "", event_hash: "ab", hinweise_offen: [], ueberstimmungen: [],
+      inhalt: { beschreibung: "beauftragt", belege: [{ quelle: { titel: "Drucksache 9/1234",
+        url: "https://buergerschaft.beispiel.test/d.pdf", archiv_url: "https://web.archive.org/web/1/x" },
+        zitat_woertlich: "Der Senat beauftragt", original_sha256: "ab".repeat(32) }] },
+    }
+    const text = zusammenfassung(v)
+    for (const teil of ["Drucksache 9/1234", "buergerschaft.beispiel.test", "web.archive.org", "„Der Senat beauftragt“",
+      "SHA-256 abababab"]) {
+      expect(text).toContain(teil)
+    }
   })
 })

@@ -1,6 +1,7 @@
-# Öffentliche Regeln für werkzeuge/scrub/pruefen.py
 # SPDX-License-Identifier: MIT
-# Eine Regex je Zeile, Groß-/Kleinschreibung egal; "CS:" = mit Groß-/Kleinschreibung.
+# Öffentliche Regeln für werkzeuge/scrub/pruefen.py
+# Eine Regex je Zeile, Groß-/Kleinschreibung egal; "CS:" = mit Groß-/Kleinschreibung;
+# "HART:" = gilt auch in Zeilen mit scrub:erlaubt (echte Schlüssel lassen sich nicht wegmarkieren).
 # Platzhalter wie C:\Users\<name>\ sind erlaubt (das "<" nach dem Pfadtrenner).
 
 # Persönliche Pfade
@@ -16,23 +17,32 @@
 \b172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b
 \b100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b
 \b([0-9A-F]{2}:){5}[0-9A-F]{2}\b
+\bf[cd][0-9a-f]{2}:[0-9a-f]{1,4}:[0-9a-f:]+
+\b[a-z0-9-]+\.[a-z0-9-]+\.ts\.net\b
 
 # E-Mail-Adressen außer Beispiel-, noreply- und Projektadressen
 \b[A-Za-z0-9._%+-]+@(?!example\.(org|com|net)\b|beispiel\.test\b|users\.noreply\.github\.com\b|anthropic\.com\b|localhost\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b
 
-# Schlüssel und Tokens
-sk-ant-[A-Za-z0-9_-]{20,}
-\bsk_[0-9a-f]{40,}\b
-\bsk-[A-Za-z0-9]{32,}\b
-\bghp_[A-Za-z0-9]{30,}
-\bgithub_pat_[A-Za-z0-9_]{30,}
-\bxox[abpr]-[A-Za-z0-9-]{10,}
-\btvly-[A-Za-z0-9-]{16,}
-\bjina_[A-Za-z0-9]{20,}
-\bAKIA[0-9A-Z]{16}\b
------BEGIN ([A-Z]+ )?PRIVATE KEY-----
-\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}
-\bphc_[A-Za-z0-9]{30,}
+# Schlüssel und Tokens (HART: auch scrub:erlaubt hilft nicht)
+HART:sk-ant-[A-Za-z0-9_-]{20,}
+HART:\bsk-(proj|svcacct|admin)-[A-Za-z0-9_-]{20,}
+HART:\bsk_[0-9a-f]{40,}\b
+HART:\bsk-[A-Za-z0-9]{32,}\b
+HART:CS:\b(sk|rk)_(live|test)_[A-Za-z0-9]{16,}
+HART:CS:\bgh[pousr]_[A-Za-z0-9]{30,}
+HART:\bgithub_pat_[A-Za-z0-9_]{30,}
+HART:\bglpat-[A-Za-z0-9_-]{20,}
+HART:CS:\bnpm_[A-Za-z0-9]{36}\b
+HART:CS:\bhf_[A-Za-z0-9]{30,}
+HART:CS:\bAIza[0-9A-Za-z_-]{35}
+HART:CS:\bre_(?=[A-Za-z0-9_]*[0-9])(?=[A-Za-z0-9_]*[A-Z])[A-Za-z0-9_]{20,}
+HART:\bxox[abpr]-[A-Za-z0-9-]{10,}
+HART:\btvly-[A-Za-z0-9-]{16,}
+HART:\bjina_[A-Za-z0-9]{20,}
+HART:CS:\bAKIA[0-9A-Z]{16}\b
+HART:-----BEGIN ([A-Z]+ )?PRIVATE KEY-----
+HART:\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}
+HART:\bphc_[A-Za-z0-9]{30,}
 
 # Interne Verweise aus dem Ursprungsprojekt
 CS:\bFalle \d+\b

@@ -25,6 +25,10 @@ Mitglieder und Besucher ohne Konto bekommen eine eigene Lese-Ansicht, nie die We
 `alles_belegte` zeigt jeden belegten Faden, auch Entwürfe. Das ist für geschlossene Runden gedacht, nicht für die
 Öffentlichkeit.
 
+**Veröffentlichen** geht über „Regeln“ → „Veröffentlichen“: Erst die Vorschau für Besucher, dann das Umschalten. Die
+Vorschau zeigt genau die Lese-Ansicht und alle Freitexte, die keine Unterschrift deckt – Titel, Beschreibung,
+Rahmen, Meinungs-Zettel, Mappen –, auch wenn ein Werkzeug sie auf dem Arbeits-Board geschrieben hat.
+
 ## Was Werkzeuge und Agenten nicht können
 
 Mit einem Token (CLI, MCP-Server) lässt der Server **nicht** zu (403 bzw. 409):
@@ -91,13 +95,18 @@ Format: [`atlas-trace-v1`](https://github.com/ThePyth0nKid/atlas) (Prüfer unter
   Adresse und jede Weiterleitung gegen private, lokale und reservierte Netze und begrenzt Größe und Zeit
   (`backend/akte/abruf.py`, Tests in `test_sicherung.py`).
 * **Drossel ohne Konto:** zählt die Verbindungsadresse; Proxy-Köpfen wird nur nach Einstellung geglaubt
-  (`AKTE_CLIENT_IP_HEADER`, `AKTE_VERTRAUTE_PROXYS`). Die Anmeldung bremst Fehlversuche je Konto.
+  (`AKTE_CLIENT_IP_HEADER`, `AKTE_VERTRAUTE_PROXYS`). Der Export der Kette hat eine eigene, engere Drossel.
+* **Anmeldung:** Fehlversuche zählen je Konto *und* Absender (10 je Minute), dazu ein Deckel je Absender. Ein Fremder
+  kann so niemanden aussperren. Der Preis: Wer von sehr vielen Adressen aus rät, kommt auf 10 Versuche je Minute und
+  Adresse. Darum lange Passwörter (mindestens 10 Zeichen, gegen Listen geprüft) und die Akte nur hinter HTTPS und
+  bewusst ins Netz stellen.
 * **Sitzungen:** Refresh-Tokens rotieren; ein benutzter oder abgemeldeter Token steht auf einer Sperrliste.
   Ändernde Anfragen an die Oberfläche müssen aus ihr selbst kommen (`Sec-Fetch-Site`/`Origin`), dazu
   `SameSite=Lax`-Cookies, `frame-ancestors 'none'`, `nosniff`. Die Django-Verwaltung ist über den Eingang nicht
   erreichbar.
-* **archive.org** bekommt keine Adressen mit Zugangsdaten und nichts aus dem eigenen Netz; ganz aus mit
-  `AKTE_ARCHIV_AKTIV=false`.
+* **archive.org** bekommt keine Adressen mit Zugangsdaten, keine mit Zugangs-Parametern (signierte Links,
+  `token`, `key`, `session` …) und nichts aus dem eigenen Netz; ganz aus mit `AKTE_ARCHIV_AKTIV=false`. Jede andere
+  Quell-URL geht hinaus, sobald die Quelle angelegt ist, auch von einem Werkzeug.
 * **Beweis-Speicher:** Kopien werden vollständig geschrieben und erst dann sichtbar; beim Lesen wird die Prüfsumme
   verglichen, eine veränderte Kopie wird nie ausgeliefert.
 * **Privatpersonen:** öffentlich nur mit Initialen, ohne Kennung, die sich über Boards verknüpfen ließe; Verdacht und
@@ -119,6 +128,14 @@ Format: [`atlas-trace-v1`](https://github.com/ThePyth0nKid/atlas) (Prüfer unter
   Kette enthält für sie aber keine Freigabe. Werkzeuge und Agenten können das nicht.
 * Ein verlorener Browser-Schlüssel lässt sich nur mit einem anderen eigenen Schlüssel widerrufen; der Browser legt
   dafür bei der nächsten Anmeldung einen neuen an.
+* Der Trace eines Exports enthält alle Ereignisse, auch zu nicht öffentlichen Objekten: Zeitpunkt, Art und Schlüssel
+  sind sichtbar, Inhalte nur als Zusage. Anders ließe sich die Kette nicht auf Lücken prüfen.
+* Jedes neue Ereignis zwischen Vorbereiten und Unterschreiben lässt eine Freigabe neu anlaufen. Die Oberfläche
+  wiederholt das von selbst; ein Werkzeug, das ständig sichert, kann Freigaben aber verzögern (Sichern und Anhänge
+  sind je Konto gedrosselt).
+* Ein Werkzeug kann beim Anlegen „öffentliche Person“ vorschlagen. Der volle Name erscheint erst, wenn ein Mensch die
+  Karte mit dieser Angabe unterschreibt; der Dialog zeigt sie.
+* In Mappen gelten für Bündel-Fäden die Prüfregeln des Boards, das man gerade ansieht, nicht die des Unter-Boards.
 * Der Atlas-Prüfer im Browser kennt nur den nachsichtigen Modus; die strikte Kette prüft `akte pruefe-signaturen`.
 
 ## Sicherheitslücken melden

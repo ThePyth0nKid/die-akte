@@ -36,6 +36,7 @@ urlpatterns = [
     path("boards/", views.BoardListeView.as_view(), name="akte-boards"),
     path("boards/<slug:slug>/", views.BoardDetailView.as_view(), name="akte-board"),
     path("boards/<slug:slug>/pruefung/", views.PruefungView.as_view(), name="akte-pruefung"),
+    path("boards/<slug:slug>/lesevorschau/", views.LesevorschauView.as_view(), name="akte-lesevorschau"),
     path("boards/<slug:slug>/positionen/", views.PositionenView.as_view(), name="akte-positionen"),
     path("boards/<slug:slug>/aufraeumen/", views.AufraeumenView.as_view(), name="akte-aufraeumen"),
     path(

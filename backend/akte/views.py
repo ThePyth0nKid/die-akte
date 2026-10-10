@@ -296,6 +296,7 @@ class QuelleAusDateiView(_AnhangBasis):
             protokolliere(quelle, "angelegt", request.user)
             slug = request.data.get("board")
             if slug:
+                menschenrecht.pruefe_board_werkzeug(request, slug)
                 board = _board(slug)
                 BoardBeweis.objects.get_or_create(
                     board=board, quelle=quelle,
@@ -964,6 +965,17 @@ class FadenAusblendenView(Redaktion, APIView):
             return Response({"ausgeblendet": False})
         board.ausgeblendete_verbindungen.add(faden)
         return Response({"ausgeblendet": True})
+
+
+class LesevorschauView(Redaktion, APIView):
+    """Was Besucher ohne Konto sähen, wenn dieses Board öffentlich wäre. Die Oberfläche zeigt das vor dem
+    Veröffentlichen, mit allen Freitexten (Titel, Beschreibung, Rahmen, Meinungs-Zettel, Mappen), damit ein Mensch
+    nichts mitveröffentlicht, das ein Werkzeug geschrieben hat und er nie gesehen hat."""
+
+    def get(self, request, slug):
+        board = _board(slug)
+        lesbar = set(Board.objects.filter(oeffentlich=True).values_list("slug", flat=True)) | {board.slug}
+        return Response(wand_fuer_mitglieder(board, lesbar))
 
 
 class PruefungView(Redaktion, APIView):

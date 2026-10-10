@@ -39,12 +39,14 @@ def test_platzhalterpfad_ist_erlaubt(tmp_path):
     assert scrub.dateien_pruefen([datei], tmp_path, _oeffentlich()) == []
 
 
-def test_erlaubt_marke_gilt_nur_fuer_oeffentliche_regeln(tmp_path):
+def test_erlaubt_marke_gilt_nur_fuer_weiche_oeffentliche_regeln(tmp_path):
     regeln = _oeffentlich() + scrub._regeln_lesen("geheimwort", True, "privat")
     datei = tmp_path / "c.txt"
-    datei.write_text(f"{SCHLUESSEL} geheimwort  # scrub:erlaubt\n", encoding="utf-8")
+    ip = ".".join(["10", "1", "2", "3"])
+    datei.write_text(f"{ip} geheimwort  # scrub:erlaubt\n{SCHLUESSEL}  # scrub:erlaubt\n", encoding="utf-8")
     funde = scrub.dateien_pruefen([datei], tmp_path, regeln)
-    assert [f.regel.privat for f in funde] == [True]
+    # Zeile 1: die IP-Regel schweigt, die private Regel nicht. Zeile 2: ein Schlüssel ist HART.
+    assert sorted((f.zeile, f.regel.privat) for f in funde) == [(1, True), (2, False)]
 
 
 def test_private_regex_fehler_verraet_kein_muster():
@@ -145,3 +147,73 @@ def test_windows_1252_trifft_umlaut_regel(tmp_path):
     datei = tmp_path / "alt.txt"
     datei.write_bytes("Frau Müller".encode("cp1252"))
     assert len(scrub.dateien_pruefen([datei], tmp_path, scrub._regeln_lesen("Müller", True, "privat"))) == 1
+
+
+# Schlüsselförmige Testwerte, zur Laufzeit zusammengesetzt, damit diese Datei selbst sauber bleibt.
+NEUE_SCHLUESSEL = ["r" + "e_" + "Ab3" + "x" * 30, "sk" + "-proj-" + "A" * 30, "AI" + "za" + "B" * 35,
+                   "sk" + "_live_" + "C" * 24, "h" + "f_" + "D" * 34, "gl" + "pat-" + "E" * 20]
+
+
+def test_neue_schluesselmuster_und_hart_trotz_marke(tmp_path):
+    datei = tmp_path / "k.txt"
+    datei.write_text("\n".join(f"wert = {k}  # scrub:erlaubt" for k in NEUE_SCHLUESSEL) + "\n", encoding="utf-8")
+    funde = scrub.dateien_pruefen([datei], tmp_path, _oeffentlich())
+    assert sorted(f.zeile for f in funde) == list(range(1, len(NEUE_SCHLUESSEL) + 1))
+    harmlos = tmp_path / "h.py"
+    harmlos.write_text("re_evaluate_signatures_later = 1\nkeyword = 'senat'\n", encoding="utf-8")
+    assert scrub.dateien_pruefen([harmlos], tmp_path, _oeffentlich()) == []
+
+
+def test_gross_klein_auch_bei_umlauten(tmp_path):
+    datei = tmp_path / "u.txt"
+    datei.write_text("FRAU MÜLLER\n", encoding="utf-8")
+    assert len(scrub.dateien_pruefen([datei], tmp_path, scrub._regeln_lesen("müller", True, "privat"))) == 1
+
+
+def test_zip_und_docx_werden_durchsucht(tmp_path):
+    import zipfile
+
+    datei = tmp_path / "bericht.docx"
+    with zipfile.ZipFile(datei, "w") as z:
+        z.writestr("word/document.xml", f"<w:t>{SCHLUESSEL}</w:t>")
+    funde = scrub.dateien_pruefen([datei], tmp_path, _oeffentlich())
+    assert any(f.ort == "bericht.docx!word/document.xml" for f in funde)
+
+
+def test_utf16_ohne_bom(tmp_path):
+    datei = tmp_path / "le.txt"
+    datei.write_bytes(f"token = {SCHLUESSEL}\n".encode("utf-16-le"))
+    assert len(scrub.dateien_pruefen([datei], tmp_path, _oeffentlich())) == 1
+
+
+def test_fehlende_sperrliste_bricht_ab(monkeypatch, tmp_path):
+    monkeypatch.setenv("OSS_SCRUB_SPERRLISTE", str(tmp_path / "gibt-es-nicht.txt"))
+    with pytest.raises(SystemExit):
+        scrub.regeln_laden()
+
+
+def test_tags_werden_geprueft(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    for k, v in (("user.name", "Test"), ("user.email", "test@example.org"), ("commit.gpgsign", "false"),
+                 ("tag.gpgsign", "false")):
+        _git(repo, "config", k, v)
+    (repo / "a.txt").write_text("sauber\n", encoding="utf-8")
+    _git(repo, "add", "a.txt")
+    _git(repo, "commit", "-q", "-m", "eins")
+    _git(repo, "tag", "-a", "v1", "-m", f"Stand mit {SCHLUESSEL}")
+    monkeypatch.chdir(repo)
+    assert [f.ort for f in scrub.historie_pruefen(_oeffentlich())] == ["tags"]
+
+
+def test_verlinkter_ordner_ist_nicht_geprueft(tmp_path):
+    ziel = tmp_path / "ziel"
+    ziel.mkdir()
+    (tmp_path / "staging").mkdir()
+    try:
+        (tmp_path / "staging" / "link").symlink_to(ziel, target_is_directory=True)
+    except OSError:
+        pytest.skip("Symlinks brauchen hier Rechte")
+    funde = scrub.dateien_pruefen(scrub.ordner_dateien(tmp_path / "staging"), tmp_path / "staging", _oeffentlich())
+    assert [f.regel is scrub.UNGEPRUEFT for f in funde] == [True]

@@ -14,6 +14,11 @@ describe("sicheresZiel", () => {
     expect(sicheresZiel("//boese.example")).toBe("/akte")
     expect(sicheresZiel("/\\boese.example")).toBe("/akte")
   })
+  it("verweigert Punktsegmente, die zu // aufgelöst werden", () => {
+    for (const z of ["/.//boese.example", "/a/..//boese.example", "/%2e//boese.example", "/./%2e/..//boese.example"]) {
+      expect(sicheresZiel(z)).toBe("/akte")
+    }
+  })
   it("verweigert Steuerzeichen, die der Browser entfernt (aus /<Tab>/x wird //x)", () => {
     for (const z of ["/\t/boese.example", "/\n/boese.example", "/\r\n/boese.example", "/\u0000/x", "/a\\b"]) {
       expect(sicheresZiel(z)).toBe("/akte")

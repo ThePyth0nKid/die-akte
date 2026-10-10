@@ -1,11 +1,12 @@
 import type { NextConfig } from "next"
 
-// Mit Docker leitet Caddy /api/v1, /admin und /static an das Backend weiter (gleiche Herkunft).
+// Mit Docker leitet Caddy /api/v1 und /static an das Backend weiter (gleiche Herkunft; /admin bewusst nicht).
 // Ohne Docker (AKTE_OHNE_PROXY=1 npm run dev) übernehmen das diese Umleitungen.
 const DJANGO_API_URL = process.env.DJANGO_API_URL || "http://127.0.0.1:8000"
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  poweredByHeader: false,
   // Django erwartet den Schrägstrich am Ende (/api/v1/akte/boards/). Ohne diese Zeile leitet Next mit 308 um.
   skipTrailingSlashRedirect: true,
   async rewrites() {

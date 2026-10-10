@@ -147,6 +147,7 @@ REST_FRAMEWORK = {
         "login_konto": os.environ.get("AKTE_DROSSEL_LOGIN_KONTO", "10/min"),
         "akte_mitglied": os.environ.get("AKTE_DROSSEL_MITGLIED", "300/hour"),
         "akte_oeffentlich": os.environ.get("AKTE_DROSSEL_OEFFENTLICH", "120/min"),
+        "akte_export": os.environ.get("AKTE_DROSSEL_EXPORT", "10/min"),
     },
     # Zahl der eigenen Proxys vor der API (für die IP in X-Forwarded-For bei den Drosseln). 0 = nur die
     # Verbindungsadresse; nie None, denn dann glaubte DRF einem X-Forwarded-For, den jeder selbst setzen kann.

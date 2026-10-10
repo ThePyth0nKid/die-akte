@@ -1,13 +1,15 @@
 "use client"
 
-// Prüfregeln dieses Boards und die eigenen Schlüssel. Die Prüfung berät, der Mensch entscheidet: Jede Regel ist
-// einzeln einstellbar (aus, Hinweis, sperrt). Ob ein Faden freigegeben und seitdem unverändert ist, sperrt immer.
+// Prüfregeln dieses Boards, Veröffentlichen und die eigenen Schlüssel. Die Prüfung berät, der Mensch entscheidet:
+// Jede Regel ist einzeln einstellbar (aus, Hinweis, sperrt). Ob ein Faden freigegeben und seitdem unverändert ist,
+// sperrt immer. Vor dem Veröffentlichen sieht der Mensch genau die Lese-Ansicht, samt aller Freitexte – auch solcher,
+// die ein Werkzeug geschrieben hat (Rahmen, Beschreibungen).
 
 import { useEffect, useState } from "react"
-import { KeyRound, X } from "lucide-react"
+import { Globe, KeyRound, X } from "lucide-react"
 import { akte, AkteFehler } from "@/lib/akte/api"
 import { eigeneSchluessel, hierGespeichert, widerrufen, type EigenerSchluessel } from "@/lib/akte/unterschrift"
-import type { Regel, Stufe } from "@/lib/akte/typen"
+import type { Regel, Stufe, Wand } from "@/lib/akte/typen"
 
 const STUFEN: { wert: Stufe; name: string }[] = [
   { wert: "aus", name: "aus" },
@@ -17,8 +19,18 @@ const STUFEN: { wert: Stufe; name: string }[] = [
 
 type Schluessel = EigenerSchluessel & { hier: boolean }
 
-export default function RegelnDialog({ slug, schliessen, geaendert }: {
+/** Alles, was Leser als Text zu sehen bekommen, ohne Karten- und Fadeninhalte (die hat ein Mensch unterschrieben). */
+function freitexte(w: Wand): { wo: string; text: string }[] {
+  const liste = [{ wo: "Titel", text: w.board.titel }, { wo: "Beschreibung", text: w.board.beschreibung }]
+  for (const r of w.rahmen) liste.push({ wo: "Rahmen", text: r.titel })
+  for (const z of w.zettel) liste.push({ wo: "Meinungs-Zettel", text: z.text })
+  for (const m of w.mappen ?? []) liste.push({ wo: "Mappe", text: [m.titel, m.beschreibung].filter(Boolean).join(" – ") })
+  return liste.filter((t) => t.text && t.text.trim())
+}
+
+export default function RegelnDialog({ slug, oeffentlich, schliessen, geaendert }: {
   slug: string
+  oeffentlich: boolean
   schliessen: () => void
   geaendert: () => void
 }) {
@@ -27,6 +39,38 @@ export default function RegelnDialog({ slug, schliessen, geaendert }: {
   const [schluessel, setSchluessel] = useState<Schluessel[]>([])
   const [meldung, setMeldung] = useState("")
   const [laeuft, setLaeuft] = useState(false)
+  const [vorschau, setVorschau] = useState<Wand | null>(null)
+  const [istOeffentlich, setIstOeffentlich] = useState(oeffentlich)
+
+  async function vorschauLaden() {
+    setLaeuft(true)
+    try {
+      setVorschau(await akte.lesevorschau(slug))
+    } catch (e) {
+      setMeldung(e instanceof Error ? e.message : "Vorschau nicht lesbar.")
+    } finally {
+      setLaeuft(false)
+    }
+  }
+
+  async function oeffentlichSetzen(an: boolean) {
+    const frage = an
+      ? "Dieses Board jetzt öffentlich schalten? Besucher ohne Konto sehen genau die Vorschau oben, " +
+        "sofern die Akte Lesen ohne Konto erlaubt (AKTE_OEFFENTLICH_AKTIV)."
+      : "Dieses Board nicht mehr öffentlich zeigen?"
+    if (!window.confirm(frage)) return
+    setLaeuft(true)
+    try {
+      await akte.boardAendern(slug, { oeffentlich: an })
+      setIstOeffentlich(an)
+      setMeldung(an ? "Öffentlich." : "Nicht mehr öffentlich.")
+      geaendert()
+    } catch (e) {
+      setMeldung(e instanceof Error ? e.message : "Umschalten fehlgeschlagen.")
+    } finally {
+      setLaeuft(false)
+    }
+  }
 
   async function schluesselLaden() {
     const liste = await eigeneSchluessel()
@@ -84,10 +128,10 @@ export default function RegelnDialog({ slug, schliessen, geaendert }: {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-[8vh]"
       onMouseDown={schliessen}>
-      <div role="dialog" aria-label="Prüfregeln und Schlüssel" onMouseDown={(e) => e.stopPropagation()}
+      <div role="dialog" aria-label="Regeln, Veröffentlichen und Schlüssel" onMouseDown={(e) => e.stopPropagation()}
         className="w-full max-w-2xl rounded-lg border border-[#222636] bg-[#0d0e14] p-5 text-[#F2F7FB] shadow-2xl">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Prüfregeln dieses Boards</h2>
+          <h2 className="text-lg font-semibold">Regeln und Veröffentlichen</h2>
           <button type="button" onClick={schliessen} aria-label="Schließen" className="rounded p-2 hover:bg-white/10">
             <X className="h-4 w-4" />
           </button>
@@ -131,6 +175,44 @@ export default function RegelnDialog({ slug, schliessen, geaendert }: {
               className="min-h-10 rounded-md px-4 text-sm text-[#8A94A0] hover:bg-white/10">
               Auf Standard zurücksetzen
             </button>
+          </div>
+        )}
+
+        <h3 className="mb-2 flex items-center gap-2 font-semibold"><Globe className="h-4 w-4" /> Veröffentlichen</h3>
+        <p className="mb-2 text-sm text-[#8A94A0]">
+          {istOeffentlich ? "Dieses Board ist öffentlich." : "Dieses Board ist nicht öffentlich."} Leser sehen nur Karten
+          und Fäden, die ein Mensch unterschrieben hat. Titel, Beschreibung, Rahmen, Meinungs-Zettel und Mappen
+          erscheinen dagegen so, wie sie sind – prüfe sie in der Vorschau.
+        </p>
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button type="button" disabled={laeuft} onClick={vorschauLaden}
+            className="min-h-10 rounded-md border border-[#222636] px-4 text-sm hover:bg-white/10">
+            Vorschau für Besucher
+          </button>
+          {istOeffentlich ? (
+            <button type="button" disabled={laeuft} onClick={() => oeffentlichSetzen(false)}
+              className="min-h-10 rounded-md px-4 text-sm text-[#FF1744] hover:bg-[#FF1744]/10">
+              Nicht mehr öffentlich
+            </button>
+          ) : (
+            <button type="button" disabled={laeuft || !vorschau} onClick={() => oeffentlichSetzen(true)}
+              title={vorschau ? "" : "Erst die Vorschau ansehen"}
+              className="min-h-10 rounded-md bg-[#f0c674] px-4 text-sm font-semibold text-[#0A0A0F] disabled:opacity-40">
+              Öffentlich schalten
+            </button>
+          )}
+        </div>
+        {vorschau && (
+          <div className="mb-6 rounded border border-[#222636] p-3 text-sm" aria-label="Vorschau für Besucher">
+            <p className="mb-2">
+              {vorschau.karten.length} Karten, {vorschau.faeden.length} Fäden
+              {vorschau.mappen?.length ? `, ${vorschau.mappen.length} Mappen` : ""} sichtbar.
+            </p>
+            <ul className="space-y-1">
+              {freitexte(vorschau).map((t, i) => (
+                <li key={i}><span className="text-[#8A94A0]">{t.wo}:</span> {t.text}</li>
+              ))}
+            </ul>
           </div>
         )}
 

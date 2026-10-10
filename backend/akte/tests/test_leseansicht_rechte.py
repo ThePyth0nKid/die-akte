@@ -202,12 +202,12 @@ class BeweisschichtHaertungTest(_Grundlage):
         signiert = json.loads(e.json)
         self.assertEqual(set(signiert["payload"]), {"type", "objekt", "inhalt_zusage"})
         self.assertNotIn("redaktion", e.kid)
-        self.assertRegex(e.kid, r"^akte-mensch:[0-9a-f]{16}$")
+        self.assertRegex(e.kid, r"^akte-mensch:[0-9a-f]{32}$")
         self.assertEqual(e.inhalt["ueberstimmungen"], [{"code": "quelle_ohne_archiv", "begruendung": "Archiv folgt"}])
 
     def test_geraeteschluessel_kennung_mit_fingerabdruck(self):
         kid, _ = beweisschicht.geraeteschluessel()
-        self.assertRegex(kid, r"^akte-geraet:[0-9a-f]{16}$")
+        self.assertRegex(kid, r"^akte-geraet:[0-9a-f]{32}$")
         self.assertEqual(beweisschicht.geraeteschluessel()[0], kid)
 
     def test_widerruf_in_der_kette(self):
@@ -399,3 +399,53 @@ class NachgereichtUndZwischenzeitTest(_Grundlage):
             (Path(ordner) / schl).write_bytes(b"halb")
             speicher.ablegen(schl, daten, "application/pdf")
             self.assertEqual(speicher.lesen(schl), daten)
+
+
+class SicherheitRunde3Test(_Grundlage):
+    """Security-Review Runde 3: Vorschau vor dem Veröffentlichen, archive.org-Parameter, Wege ohne Slug."""
+
+    def test_lesevorschau_zeigt_freitexte_aber_keine_entwuerfe(self):
+        a, b, _, v = self.werkzeug_legt_an()
+        for e in (a, b):
+            self.werkzeug.post(f"{A}/boards/arbeit/karten/", {"entitaet": e["id"]}, format="json")
+        self.werkzeug.post(f"{A}/boards/arbeit/rahmen/", {"titel": "Von einem Werkzeug"}, format="json")
+        vorschau = self.mensch.get(f"{A}/boards/arbeit/lesevorschau/").json()
+        self.assertEqual(vorschau["karten"], [])  # Entwürfe nicht
+        self.assertEqual([r["titel"] for r in vorschau["rahmen"]], ["Von einem Werkzeug"])  # Freitext ja
+
+    def test_aus_datei_legt_nichts_auf_ein_veroeffentlichtes_board(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        datei = SimpleUploadedFile("a.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf")
+        r = self.werkzeug.post(f"{A}/quellen/aus-datei/", {"datei": datei, "board": "offen"}, format="multipart")
+        self.assertEqual(r.status_code, 403)
+
+    @override_settings(AKTE_MITGLIEDER_BOARDS="kreis")
+    def test_werkzeug_besetzt_keine_mitglieder_kennung(self):
+        self.assertEqual(self.werkzeug.post(f"{A}/boards/", {"titel": "Kreis", "slug": "kreis"},
+                                            format="json").status_code, 403)
+        self.assertEqual(self.mensch.post(f"{A}/boards/", {"titel": "Kreis", "slug": "kreis"},
+                                          format="json").status_code, 201)
+
+    def test_archive_org_bekommt_keine_signierten_links(self):
+        from akte.sicherung import _archiv_verweigert
+
+        with mock.patch("akte.sicherung.pruefe_url"):
+            for url in ("https://x.beispiel.test/a.pdf?X-Amz-Signature=abc", "https://x.beispiel.test/?access_token=1",
+                        "https://x.beispiel.test/?apikey=1", "https://x.beispiel.test/?sessionid=1"):
+                self.assertIn("Zugangs-Parameter", _archiv_verweigert(url), url)
+            for url in ("https://x.beispiel.test/suche?keyword=senat", "https://x.beispiel.test/?id=7&seite=2"):
+                self.assertEqual(_archiv_verweigert(url), "", url)
+
+    @override_settings(AKTE_OEFFENTLICH_AKTIV=True)
+    def test_export_fuer_besucher_gedrosselt(self):
+        from django.conf import settings as s
+
+        raten = {**s.REST_FRAMEWORK, "DEFAULT_THROTTLE_RATES": {**s.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"],
+                                                                 "akte_export": "2/min"}}
+        from akte.views_beweis import ExportDrossel
+
+        with override_settings(REST_FRAMEWORK=raten), mock.patch.object(
+                ExportDrossel, "THROTTLE_RATES", raten["DEFAULT_THROTTLE_RATES"]):
+            codes = [self.besucher.get(f"{B}/export/").status_code for _ in range(3)]
+        self.assertEqual(codes, [200, 200, 429])
