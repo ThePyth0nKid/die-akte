@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "akte-beweis"
+version = "0.1.0"
+description = "Beweisschicht der Akte: signierte, verkettete Ereignisse im Atlas-Format (atlas-trace-v1) und ihre Prüfung"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+dependencies = [
+  "blake3>=1.0",
+  "cryptography>=42",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/akte_beweis"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

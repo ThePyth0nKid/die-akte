@@ -1,0 +1,11 @@
+{
+  "name": "akte-beweis-kreuzpruefung",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Prüft Traces der Akte unabhängig mit dem WASM-Prüfer von Atlas",
+  "type": "module",
+  "dependencies": {
+    "@atlas-trust/verify-wasm": "1.0.1"
+  }
+}

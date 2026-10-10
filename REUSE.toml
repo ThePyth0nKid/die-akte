@@ -1,7 +1,7 @@
 version = 1
 
 [[annotations]]
-path = ["mcp/**", "skills/**", "werkzeuge/**"]
+path = ["mcp/**", "beweis/**", "skills/**", "werkzeuge/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 ThePyth0nKid und Mitwirkende"
 SPDX-License-Identifier = "MIT"
