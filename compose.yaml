@@ -1,0 +1,39 @@
+# Die Akte lokal: docker compose up -d --build  →  http://localhost:8080
+# Läuft nur auf deinem Rechner (Port an 127.0.0.1 gebunden). Daten im Volume "akte-daten".
+name: die-akte
+
+services:
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      AKTE_DATEN: /daten
+      AKTE_VERTRAUTE_PROXYS: "1"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,api
+    volumes:
+      - akte-daten:/daten
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    environment:
+      DJANGO_API_URL: http://api:8000
+      COOKIE_SECURE: "false"
+      AKTE_TITEL: ${AKTE_TITEL:-Die Akte}
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2.10-alpine
+    ports:
+      - "127.0.0.1:${AKTE_PORT:-8080}:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+
+volumes:
+  akte-daten:

@@ -6,6 +6,8 @@ const DJANGO_API_URL = process.env.DJANGO_API_URL || "http://127.0.0.1:8000"
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Django erwartet den Schrägstrich am Ende (/api/v1/akte/boards/). Ohne diese Zeile leitet Next mit 308 um.
+  skipTrailingSlashRedirect: true,
   async rewrites() {
     if (process.env.AKTE_OHNE_PROXY !== "1") return []
     return [

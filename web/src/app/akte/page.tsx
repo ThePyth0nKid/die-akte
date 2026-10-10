@@ -26,11 +26,13 @@ export default function AkteStart() {
   }, [boards, redaktion, router])
 
   useEffect(() => {
-    akte.boards().then(setBoards).catch((e) =>
-      setFehler(e instanceof AkteFehler && e.status === 403
+    akte.boards().then(setBoards).catch((e) => {
+      // Ohne Anmeldung und ohne öffentliche Boards: keine Fehlermeldung, sondern der Weg zum Login.
+      if (e instanceof AkteFehler && e.status === 401) setBoards([])
+      else setFehler(e instanceof AkteFehler && e.status === 403
         ? "Die Akte ist bisher nur für die Redaktion offen."
-        : "Die Boards konnten nicht geladen werden."),
-    )
+        : "Die Boards konnten nicht geladen werden.")
+    })
   }, [])
 
   async function anlegen(e: React.FormEvent) {

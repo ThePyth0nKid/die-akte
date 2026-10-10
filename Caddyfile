@@ -1,0 +1,13 @@
+# Ein Eingang für Oberfläche und API (gleiche Herkunft): http://localhost:8080
+:8080 {
+	encode gzip
+
+	@backend path /api/v1/* /admin/* /static/*
+	handle @backend {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
