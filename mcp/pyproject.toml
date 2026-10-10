@@ -17,6 +17,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Signaturen prüfen (akte pruefe-signaturen): das Paket akte-beweis aus demselben Repo.
+beweis = ["akte-beweis"]
 test = ["pytest>=8", "responses>=0.25"]
 
 [project.scripts]

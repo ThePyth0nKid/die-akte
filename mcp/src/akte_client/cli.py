@@ -135,6 +135,11 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--stand", default=""); p.add_argument("--lizenz", default="CC-BY-SA-4.0")
     p.add_argument("--herausgeber", default="")
     p.add_argument("--privatnamen", help="Datei mit vollen Namen von Privatpersonen, eine je Zeile (wird nur gelesen)")
+    p = sub.add_parser("pruefe-signaturen", help="Beweiskette prüfen (Signaturen, Reihenfolge, Rollen, Offenlegung)")
+    p.add_argument("--datei", help="Export-Datei statt Abruf von --basis")
+    p.add_argument("--atlas", action="store_true", help="zusätzlich mit dem WASM-Prüfer von Atlas prüfen")
+    p.add_argument("--speichern", help="Ordner: trace.json, buendel.json, offenlegung.json für Dritte ablegen")
+    p.add_argument("--ausfuehrlich", action="store_true")
     return ap
 
 
@@ -142,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     a = _parser().parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    if not a.basis:
+    if not a.basis and not (a.befehl == "pruefe-signaturen" and a.datei):
         print("AKTE_BASIS fehlt (z. B. http://localhost:8080).", file=sys.stderr)
         return 2
     try:
@@ -153,6 +158,30 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _ausfuehren(a: argparse.Namespace) -> int:
+    if a.befehl == "pruefe-signaturen":
+        from . import signaturen
+
+        export = signaturen.laden(basis=a.basis, datei=a.datei or "", token=os.environ.get("AKTE_TOKEN"))
+        if a.speichern:
+            for pfad in signaturen.speichern(export, Path(a.speichern)):
+                print(f"geschrieben: {pfad}")
+        erg = signaturen.pruefen(export, mit_atlas=a.atlas)
+        if a.ausfuehrlich:
+            zeige(erg)
+        else:
+            for teil in ("kette", "regeln"):
+                for n in erg[teil]["nachweise"]:
+                    print(f"  {'✓' if n['ok'] else '✗'} {n['check']} {n['detail']}")
+                for f in erg[teil]["fehler"]:
+                    print(f"    ! {f}")
+            if "atlas" in erg:
+                atlas = erg["atlas"]
+                status = "gültig" if atlas.get("valid") else atlas.get("hinweis") or "UNGÜLTIG"
+                print(f"  Atlas-Prüfer ({atlas.get('verifier_version', '–')}): {status}")
+            print(f"{'GÜLTIG' if erg['gueltig'] else 'UNGÜLTIG'}: {erg['ereignisse']} Ereignisse, "
+                  f"{erg['offengelegt']} offengelegt")
+        return 0 if erg["gueltig"] else 1
+
     if a.befehl == "export-oeffentlich":
         namen = Path(a.privatnamen).read_text(encoding="utf-8").splitlines() if a.privatnamen else []
         boards = [s.strip() for s in a.boards.split(",")] if a.boards else None
