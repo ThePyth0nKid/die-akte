@@ -1,0 +1,22 @@
+# Abhängigkeiten wöchentlich prüfen, je Bereich ein gebündelter Pull Request (sonst ertrinkt man in Einzel-PRs).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups: { actions: { patterns: ["*"] } }
+
+  - package-ecosystem: pip
+    directories: [/backend, /mcp, /beweis]
+    schedule: { interval: weekly }
+    groups: { python: { patterns: ["*"] } }
+
+  - package-ecosystem: npm
+    directories: [/web, /render, /beweis/kreuzpruefung]
+    schedule: { interval: weekly }
+    groups: { npm: { patterns: ["*"] } }
+
+  - package-ecosystem: docker
+    directories: [/backend, /web]
+    schedule: { interval: weekly }
+    groups: { docker: { patterns: ["*"] } }
