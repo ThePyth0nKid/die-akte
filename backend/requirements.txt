@@ -1,17 +1,17 @@
 # Die Akte – Backend. Feste Versionen; Aktualisierung über Dependabot.
 Django==5.2.18
-djangorestframework==3.16.1
+djangorestframework==3.18.3
 djangorestframework-simplejwt==5.5.1
-dj-database-url==3.0.1
-whitenoise==6.11.0
+dj-database-url==3.1.2
+whitenoise==6.12.0
 gunicorn==23.0.0
-celery==5.5.3
-requests==2.32.5
-boto3==1.40.49
+celery==5.6.3
+requests==2.34.2
+boto3==1.43.109
 pillow==11.3.0
 pypdfium2==4.30.1
 PyYAML==6.0.3
 # Beweisschicht (das Paket akte-beweis liegt im Repo unter beweis/ und wird zusätzlich installiert)
-blake3==1.0.8
+blake3==1.0.11
 cryptography==50.0.2
-psycopg[binary]==3.2.10
+psycopg[binary]==3.3.6
