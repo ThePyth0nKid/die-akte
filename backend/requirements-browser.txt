@@ -1,2 +1,2 @@
 # Seitenbilder und Fundstellen in Webseiten (Chromium über Playwright). Nur für den Browser-Worker oder lokal.
-playwright==1.58.0
+playwright==1.63.0
