@@ -1,22 +1,26 @@
-# Abhängigkeiten wöchentlich prüfen, je Bereich ein gebündelter Pull Request (sonst ertrinkt man in Einzel-PRs).
+# Abhängigkeiten wöchentlich prüfen. Kleine Updates (minor, patch) kommen je Bereich gebündelt; große Sprünge
+# (major) einzeln, damit sie bewusst geprüft werden. Node nur in Langzeitversionen (gerade Hauptversionen).
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
-    groups: { actions: { patterns: ["*"] } }
+    groups: { actions: { patterns: ["*"], update-types: [minor, patch] } }
 
   - package-ecosystem: pip
     directories: [/backend, /mcp, /beweis]
     schedule: { interval: weekly }
-    groups: { python: { patterns: ["*"] } }
+    groups: { python: { patterns: ["*"], update-types: [minor, patch] } }
 
   - package-ecosystem: npm
     directories: [/web, /render, /beweis/kreuzpruefung]
     schedule: { interval: weekly }
-    groups: { npm: { patterns: ["*"] } }
+    groups: { npm: { patterns: ["*"], update-types: [minor, patch] } }
 
   - package-ecosystem: docker
     directories: [/backend, /web]
     schedule: { interval: weekly }
-    groups: { docker: { patterns: ["*"] } }
+    groups: { docker: { patterns: ["*"], update-types: [minor, patch] } }
+    ignore:
+      - dependency-name: node
+        versions: ["23.x", "25.x", "27.x", "29.x"]
