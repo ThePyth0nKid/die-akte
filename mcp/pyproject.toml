@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
   "mcp>=1.12,<2",
-  "requests>=2.31",
+  "requests>=2.33",
   "PyYAML>=6.0",
 ]
 
