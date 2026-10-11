@@ -1,5 +1,5 @@
 # Die Akte – Web-Oberfläche (Next.js, standalone). Läuft als Nicht-Root-Nutzer.
-FROM node:22-slim AS bau
+FROM node:25-slim AS bau
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
@@ -7,7 +7,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM node:22-slim
+FROM node:25-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
