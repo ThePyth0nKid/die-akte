@@ -20,8 +20,9 @@
 \bf[cd][0-9a-f]{2}:[0-9a-f]{1,4}:[0-9a-f:]+
 \b[a-z0-9-]+\.[a-z0-9-]+\.ts\.net\b
 
-# E-Mail-Adressen außer Beispiel-, noreply- und Projektadressen
-\b[A-Za-z0-9._%+-]+@(?!example\.(org|com|net)\b|beispiel\.test\b|users\.noreply\.github\.com\b|anthropic\.com\b|localhost\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b
+# E-Mail-Adressen außer Beispiel-, noreply- und Projektadressen (dazu GitHubs eigene Absender: Merge- und
+# Dependabot-Commits tragen noreply@github.com und support@github.com)
+\b[A-Za-z0-9._%+-]+@(?!example\.(org|com|net)\b|beispiel\.test\b|(users\.)?noreply\.github\.com\b|github\.com\b|anthropic\.com\b|localhost\b)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b
 
 # Schlüssel und Tokens (HART: auch scrub:erlaubt hilft nicht)
 HART:sk-ant-[A-Za-z0-9_-]{20,}
