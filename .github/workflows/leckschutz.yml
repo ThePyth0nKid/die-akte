@@ -21,10 +21,15 @@ jobs:
           GITLEAKS_VERSION: "8.30.1"
           GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
         run: |
-          curl -sSfLo gitleaks.tar.gz             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          # Ins Temp-Verzeichnis des Runners, nicht in den Arbeitsbaum: Der Prüfer liest dort alles, auch Ungetracktes,
+          # und das gitleaks-Programm enthält selbst Schlüsselmuster.
+          cd "$RUNNER_TEMP"
+          curl -sSfLo gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
           tar -xzf gitleaks.tar.gz gitleaks
-          ./gitleaks git --redact --no-banner .
+          cd "$GITHUB_WORKSPACE"
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner .
 
       # Die private Sperrliste kommt nur bei Push im Original-Repo aus einem Actions-Secret. Pull Requests bekommen
       # sie nie: Der PR-Stand könnte das Prüfskript verändern und das Secret ausgeben. Sie prüfen die öffentlichen

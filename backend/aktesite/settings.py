@@ -90,9 +90,10 @@ TEMPLATES = [
 
 # ─── Datenbank: SQLite als Standard, Postgres über DATABASE_URL ───────────────
 DATEN_DIR.mkdir(parents=True, exist_ok=True)
+# Eine leere DATABASE_URL zählt wie keine (dj_database_url.config gäbe sonst eine leere Konfiguration zurück).
 DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{(DATEN_DIR / 'akte.sqlite3').as_posix()}",
+    "default": dj_database_url.parse(
+        os.environ.get("DATABASE_URL") or f"sqlite:///{(DATEN_DIR / 'akte.sqlite3').as_posix()}",
         conn_max_age=int(os.environ.get("DJANGO_DB_CONN_MAX_AGE", "0")),
     )
 }

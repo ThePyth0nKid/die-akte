@@ -81,10 +81,12 @@ class _Lesespeicher:
     """Öffentliche Wände für Suche und Weg im Lesemodus, 60 s zwischengespeichert."""
 
     def __init__(self, akte: Akte, sekunden: float = 60):
-        self.akte, self.sekunden, self._stand, self._waende = akte, sekunden, 0.0, []
+        # Stand None = noch nie geladen. Nicht 0.0: time.monotonic() zählt ab dem Systemstart, auf einem frisch
+        # gestarteten Rechner (CI) wäre ein leerer Speicher sonst eine Minute lang „frisch“.
+        self.akte, self.sekunden, self._stand, self._waende = akte, sekunden, None, []
 
     def waende(self) -> list[dict]:
-        if time.monotonic() - self._stand > self.sekunden:
+        if self._stand is None or time.monotonic() - self._stand > self.sekunden:
             self._waende = [self.akte.wand(b["slug"]) for b in self.akte.boards()]
             self._stand = time.monotonic()
         return self._waende
