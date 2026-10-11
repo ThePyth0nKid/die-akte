@@ -38,6 +38,7 @@ import FadenFormular from "./FadenFormular"
 import FahrtenLeiste from "./FahrtenLeiste"
 import { kantenTypen } from "./FadenKante"
 import { knotenTypen } from "./knoten"
+import KontoKnopf from "./KontoKnopf"
 import NotizLeiste from "./NotizLeiste"
 import RegelnDialog from "./RegelnDialog"
 import { FadenLesen, KarteLesen } from "./LeseAnsicht"
@@ -1318,6 +1319,7 @@ function Werkzeugleiste(p: {
       <button type="button" className={knopf} onClick={p.regeln} title="Prüfregeln dieses Boards und deine Schlüssel">
         <ShieldCheck className="h-4 w-4" aria-hidden /> Regeln
       </button>
+      <KontoKnopf />
       {p.offeneFaeden > 0 && (
         <button type="button" onClick={p.regeln}
           className="ml-1 rounded-full bg-[#FFB300]/15 px-3 py-1 text-xs text-[#FFB300] hover:bg-[#FFB300]/25"
@@ -1337,6 +1339,7 @@ function LeseKopf({ brotkrumen }: { brotkrumen: React.ReactNode }) {
       <Link href="/akte" aria-label="Zur Übersicht" className="flex min-h-10 items-center rounded-md px-3 hover:bg-white/10"><ArrowLeft className="h-4 w-4" /></Link>
       {brotkrumen}
       <span className="text-xs text-[#8A94A0]">Nur lesen. Jede Verbindung trägt ihre Quelle, Meinungen stehen auf eigenen Zetteln. Die Recherche geht weiter.</span>
+      <KontoKnopf />
     </div>
   )
 }

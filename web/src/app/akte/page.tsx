@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Download, Plus } from "lucide-react"
+import KontoKnopf from "@/components/akte/KontoKnopf"
 import { akte, AkteFehler } from "@/lib/akte/api"
 import type { Board } from "@/lib/akte/typen"
 
@@ -59,6 +60,7 @@ export default function AkteStart() {
             Die Akte
           </h1>
         </div>
+        <div className="flex items-center gap-2">
         {redaktion && (
         <a
           href={akte.exportUrl()}
@@ -68,6 +70,8 @@ export default function AkteStart() {
           <Download className="h-4 w-4" aria-hidden /> Obsidian-Vault
         </a>
         )}
+        <KontoKnopf />
+        </div>
       </header>
 
       {fehler && <p role="alert" className="mb-6 rounded-md border border-[#FF1744]/50 bg-[#FF1744]/10 p-3 text-sm">{fehler}</p>}
