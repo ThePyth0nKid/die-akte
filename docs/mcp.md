@@ -7,7 +7,7 @@
 ```sh
 docker compose exec api python manage.py akte_token <dein-konto>
 claude mcp add akte -e AKTE_BASIS=http://localhost:8080 -e AKTE_TOKEN=<token> \
-  -- uvx --from "git+https://github.com/ThePyth0nKid/die-akte#subdirectory=mcp" akte-mcp
+  -- uvx --from "git+https://github.com/ThePyth0nKid/die-akte@v0.1.0#subdirectory=mcp" akte-mcp
 ```
 
 Ohne `AKTE_TOKEN` startet der Server im **Lesemodus**: nur Boards, die ohne Konto sichtbar sind.

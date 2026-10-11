@@ -17,7 +17,7 @@ Lizenz: MIT (das Akte-Programm selbst steht unter AGPL-3.0).
 claude mcp add akte \
   -e AKTE_BASIS=http://localhost:8080 \
   -e AKTE_TOKEN=<token aus: manage.py akte_token <konto>> \
-  -- uvx --from "git+https://github.com/ThePyth0nKid/die-akte#subdirectory=mcp" akte-mcp
+  -- uvx --from "git+https://github.com/ThePyth0nKid/die-akte@v0.1.0#subdirectory=mcp" akte-mcp
 ```
 
 Ohne `AKTE_TOKEN` läuft der Server im Lesemodus.
@@ -25,7 +25,7 @@ Ohne `AKTE_TOKEN` läuft der Server im Lesemodus.
 ## Kommandozeile
 
 ```sh
-uv tool install "git+https://github.com/ThePyth0nKid/die-akte#subdirectory=mcp"
+uv tool install "git+https://github.com/ThePyth0nKid/die-akte@v0.1.0#subdirectory=mcp"
 export AKTE_BASIS=http://localhost:8080 AKTE_TOKEN=…
 akte boards
 akte import paket.json          # Probelauf

@@ -18,7 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Signaturen prüfen (akte pruefe-signaturen): das Paket akte-beweis aus demselben Repo.
-beweis = ["akte-beweis @ git+https://github.com/ThePyth0nKid/die-akte#subdirectory=beweis"]
+beweis = ["akte-beweis @ git+https://github.com/ThePyth0nKid/die-akte@v0.1.0#subdirectory=beweis"]
 test = ["pytest>=8", "responses>=0.25"]
 
 [project.scripts]

@@ -71,7 +71,7 @@ cd web && npm ci && AKTE_OHNE_PROXY=1 npm run dev     # http://localhost:3000/ak
 ```sh
 docker compose exec api python manage.py akte_token <dein-konto>      # Token einmal anzeigen lassen
 claude mcp add akte -e AKTE_BASIS=http://localhost:8080 -e AKTE_TOKEN=<token> \
-  -- uvx --from "git+https://github.com/ThePyth0nKid/die-akte#subdirectory=mcp" akte-mcp
+  -- uvx --from "git+https://github.com/ThePyth0nKid/die-akte@v0.1.0#subdirectory=mcp" akte-mcp
 ```
 
 Dann zum Beispiel: *„Lies die Wand demo-musterhafen und sag mir, welche Fäden noch offene Befunde haben.“* Ohne
@@ -80,7 +80,7 @@ Dann zum Beispiel: *„Lies die Wand demo-musterhafen und sag mir, welche Fäden
 ## Beweiskette prüfen – ohne dem Server zu vertrauen
 
 ```sh
-uv tool install "akte-mcp[beweis] @ git+https://github.com/ThePyth0nKid/die-akte#subdirectory=mcp"
+uv tool install "akte-mcp[beweis] @ git+https://github.com/ThePyth0nKid/die-akte@v0.1.0#subdirectory=mcp"
 akte pruefe-signaturen --basis http://localhost:8080 --speichern ./pruefung     # oder --datei export.json
 ```
 

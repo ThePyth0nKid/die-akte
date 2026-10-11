@@ -38,13 +38,13 @@ Load the fictional demo: `docker compose exec api python manage.py akte_demo`.
 ```sh
 docker compose exec api python manage.py akte_token <account>
 claude mcp add akte -e AKTE_BASIS=http://localhost:8080 -e AKTE_TOKEN=<token> \
-  -- uvx --from "git+https://github.com/ThePyth0nKid/die-akte#subdirectory=mcp" akte-mcp
+  -- uvx --from "git+https://github.com/ThePyth0nKid/die-akte@v0.1.0#subdirectory=mcp" akte-mcp
 ```
 
 ## Verify the evidence chain
 
 ```sh
-uv tool install "akte-mcp[beweis] @ git+https://github.com/ThePyth0nKid/die-akte#subdirectory=mcp"
+uv tool install "akte-mcp[beweis] @ git+https://github.com/ThePyth0nKid/die-akte@v0.1.0#subdirectory=mcp"
 akte pruefe-signaturen --basis http://localhost:8080 --atlas
 ```
 
