@@ -21,7 +21,8 @@ unterschreibt. Der Agent schreibt nur Entwürfe.
   `agent_verbunden`. Bei Fehlern `{"fehler": "…"}`.
 * **Claude verbinden mit einem Befehl** (`agent`): uv in fester Version mit geprüfter Prüfsumme, Benutzer-Pfad,
   Token ohne Anzeige, `claude mcp add --scope user … --python 3.12 …` aus der Release-ZIP, vorgewärmt.
-* `.env` ist nur für das eigene Benutzerkonto lesbar (Windows `icacls`, sonst `chmod 600`).
+* `.env` ist nur für das eigene Benutzerkonto lesbar (Windows: Zugriffsliste nur mit diesem Konto, sonst
+  `chmod 600`).
 * `compose.yaml` mit Healthchecks, damit `docker compose up --wait` erst zurückkehrt, wenn die Akte antwortet.
 
 ## Arbeiten an der Wand

@@ -249,13 +249,22 @@ function Setze-EnvWert([string]$Name, [string]$Wert) {
 function Schuetze-EnvDatei {
     # .env enthält den geheimen Schlüssel und den Einrichtungscode: lesen und schreiben darf sie nur dein Konto.
     # (Wie chmod 600 unter macOS und Linux. Auf Laufwerken ohne NTFS geht das nicht; dann bleibt es beim Hinweis.)
+    # Die Liste wird ganz ersetzt, nicht ergänzt: Erbt der Ordner nichts, bekommt eine neue Datei feste Einträge für
+    # SYSTEM und Administratoren, die ein bloßes „Vererbung aus“ stehen ließe.
     if (-not (Test-Path -LiteralPath $EnvDatei)) { return }
     $ok = $false
     try {
         $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-        $icacls = Join-Path $env:SystemRoot 'System32\icacls.exe'
-        $r = Invoke-Nativ $icacls @($EnvDatei, '/inheritance:r', '/grant:r', ('*' + $sid + ':(F)')) -Sekunden 30
-        $ok = ($r.Code -eq 0)
+        $rechte = New-Object System.Security.AccessControl.FileSecurity
+        $rechte.SetSecurityDescriptorSddlForm("D:P(A;;FA;;;$sid)", [System.Security.AccessControl.AccessControlSections]::Access)
+        # Nur die Zugriffsliste schreiben; Set-Acl will unter 5.1 auch die Überwachungsliste (braucht Adminrechte).
+        $info = New-Object System.IO.FileInfo $EnvDatei
+        if ($info.PSObject.Methods['SetAccessControl']) { $info.SetAccessControl($rechte) }   # Windows PowerShell 5.1
+        else { [System.IO.FileSystemAclExtensions]::SetAccessControl($info, $rechte) }        # PowerShell 7
+        $acl = Get-Acl -LiteralPath $EnvDatei
+        $regeln = @($acl.Access)
+        $nurIch = ($regeln.Count -eq 1) -and ($regeln[0].IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq $sid)
+        $ok = $acl.AreAccessRulesProtected -and $nurIch
     } catch { $ok = $false }
     if (-not $ok) { Schreib 'Hinweis: Die Rechte der Datei .env ließen sich nicht auf dein Konto beschränken.' Yellow }
 }

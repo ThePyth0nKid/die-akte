@@ -258,7 +258,7 @@ Fallen bei den Startern (`start/`):
 * `-Fenster` (aus den `.cmd`-Dateien) lässt das Fenster am Ende auf Enter warten, aber nur, wenn Ein- und Ausgabe
   ein echtes Konsolenfenster sind. Ruft ein Agent auf, blockiert nichts.
 * Ein Einrichtungscode entsteht nur für eine Akte ohne Daten-Volume; nach der Einrichtung löscht der Starter ihn aus
-  `.env`. Windows: `.env` nur für das eigene Konto (`icacls`), macOS/Linux: `chmod 600`.
+  `.env`. Windows: `.env` nur für das eigene Konto (Zugriffsliste ganz ersetzt), macOS/Linux: `chmod 600`.
 * Die Version steht in jedem Starter genau einmal (`$AkteVersion` in `akte.ps1`, `AKTE_VERSION` in `akte.sh`); die
   Prüfskripte lesen sie dort. In der Doku steht der Tag nur in Adressen als `/v0.2.0-rc.1`.
 * Programme mit vollem Pfad aufrufen (`%SystemRoot%\System32\…`), wo es geht: Auf manchen Rechnern ist der

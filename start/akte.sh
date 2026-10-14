@@ -139,12 +139,19 @@ setze_env_wert() {
   mv "$tmp" "$ENV_DATEI"
 }
 
-zufall() { # $1 erlaubte Zeichen, $2 Länge
-  local s=""
+zufall() { # $1 erlaubte Zeichen, $2 Länge → ZUFALL (nicht in $(…) aufrufen: ende muss den Starter beenden)
+  # Erst eine feste Menge lesen, dann filtern. „tr </dev/urandom | head“ endet nur über SIGPIPE; ist es ignoriert
+  # (vermutlich der Grund, warum die macOS-CI dort hing), liest das tr von macOS endlos weiter.
+  local s="" runde=0
   while [ "${#s}" -lt "$2" ]; do
-    s="$s$(LC_ALL=C tr -dc "$1" </dev/urandom 2>/dev/null | head -c "$2" || true)"
+    runde=$((runde + 1))
+    if [ "$runde" -gt 20 ]; then
+      sag_farbe "$ROT" "Kein Zufall für den Schlüssel der Akte: /dev/urandom, head oder tr fehlt." >&2
+      ende 1
+    fi
+    s="$s$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc "$1" 2>/dev/null || true)"
   done
-  printf '%s' "${s:0:$2}"
+  ZUFALL="${s:0:$2}"
 }
 
 code_anzeige() {
@@ -165,13 +172,15 @@ sichere_env_datei() {
   # Nur dein Konto darf .env lesen: Sie enthält den geheimen Schlüssel und den Einrichtungscode.
   chmod 600 "$ENV_DATEI" 2>/dev/null || true
   if [ -z "$(env_wert DJANGO_SECRET_KEY)" ]; then
-    setze_env_wert DJANGO_SECRET_KEY "$(zufall 'A-Za-z0-9_-' 64)"
+    zufall 'A-Za-z0-9_-' 64
+    setze_env_wert DJANGO_SECRET_KEY "$ZUFALL"
     sag "Neuer geheimer Schlüssel für diese Akte in .env gespeichert."
   fi
   # Einen Einrichtungscode bekommt nur eine Akte, die noch nie lief. Eine Akte mit Daten (neue Version, zweiter Start
   # nach der Einrichtung) bekommt keinen neuen: Dort gibt es schon ein Konto oder den Notweg im Terminal.
   if [ -z "$(env_wert AKTE_EINRICHTUNGSCODE)" ] && ! akte_daten_da; then
-    setze_env_wert AKTE_EINRICHTUNGSCODE "$(zufall 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' 8)"
+    zufall 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' 8
+    setze_env_wert AKTE_EINRICHTUNGSCODE "$ZUFALL"
   fi
 }
 

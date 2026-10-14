@@ -10,6 +10,9 @@ from pathlib import Path
 from django.test import SimpleTestCase
 
 BACKEND = Path(__file__).resolve().parents[2]
+# settings.py fragt nur, ob ein Modul „pytest“ geladen ist; ein leeres reicht, pytest muss nicht installiert sein
+# (die CI prüft das Backend mit manage.py test).
+PYTEST_GELADEN = "import sys, types; sys.modules['pytest'] = types.ModuleType('pytest')"
 
 
 def _testlauf(code_vorher: str, **umgebung) -> str:
@@ -25,14 +28,14 @@ def _testlauf(code_vorher: str, **umgebung) -> str:
 
 class TestlaufTest(SimpleTestCase):
     def test_pytest_allein_reicht_nicht(self):
-        self.assertEqual(_testlauf("import pytest", PYTEST_VERSION="9"), "False")
+        self.assertEqual(_testlauf(PYTEST_GELADEN, PYTEST_VERSION="9"), "False")
 
     def test_schalter_allein_reicht_nicht(self):
         # z. B. AKTE_TESTLAUF=1 versehentlich in der .env des Betriebs
         self.assertEqual(_testlauf("", AKTE_TESTLAUF="1"), "False")
 
     def test_schalter_und_pytest(self):
-        self.assertEqual(_testlauf("import pytest", AKTE_TESTLAUF="1", PYTEST_VERSION="9"), "True")
+        self.assertEqual(_testlauf(PYTEST_GELADEN, AKTE_TESTLAUF="1", PYTEST_VERSION="9"), "True")
 
     def test_schalter_und_manage_test(self):
         self.assertEqual(_testlauf("import sys; sys.argv = ['manage.py', 'test']", AKTE_TESTLAUF="1"), "True")

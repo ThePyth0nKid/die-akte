@@ -395,9 +395,19 @@ try {
     $regeln = @($acl.Access)
     $nurIch = ($regeln.Count -eq 1) -and ($regeln[0].IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq $ich)
     Pruefe 'läuft: .env nur für das eigene Konto (keine geerbten Rechte)' ($acl.AreAccessRulesProtected -and $nurIch) (($regeln | ForEach-Object { "$($_.IdentityReference) $($_.FileSystemRights)" }) -join "`n")
+    # Wie auf dem GitHub-Rechner: Erbt der Ordner nichts, hat .env feste Einträge für SYSTEM und Administratoren.
+    # Der nächste Start muss sie entfernen, nicht nur die Vererbung abschalten.
+    $envPfad = Join-Path $ordner '.env'
+    $fremd = New-Object System.Security.AccessControl.FileSecurity
+    $fremd.SetSecurityDescriptorSddlForm("D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;$ich)", [System.Security.AccessControl.AccessControlSections]::Access)
+    (New-Object System.IO.FileInfo $envPfad).SetAccessControl($fremd)
     $r2 = Starter $ordner 'start -Still' $mitDaten
-    $envText2 = [IO.File]::ReadAllText((Join-Path $ordner '.env'))
+    $envText2 = [IO.File]::ReadAllText($envPfad)
     Pruefe 'zweiter Start (Einrichtung noch offen): Schlüssel und Code bleiben' (($r2.Code -eq 0) -and ($envText2 -eq $envText)) "Code $($r2.Code)"
+    $acl = Get-Acl -LiteralPath $envPfad
+    $regeln = @($acl.Access)
+    $nurIch = ($regeln.Count -eq 1) -and ($regeln[0].IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq $ich)
+    Pruefe 'zweiter Start: feste Einträge für SYSTEM und Administratoren aus .env entfernt' ($acl.AreAccessRulesProtected -and $nurIch) (($regeln | ForEach-Object { "$($_.IdentityReference) $($_.FileSystemRights)" }) -join "`n")
 
     # Der Doppelklick-Weg (START-AKTE.cmd, -Fenster): öffnet den Browser wie start, zeigt keinen Code.
     if (Test-Path $BrowserLog) { Remove-Item $BrowserLog }

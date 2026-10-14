@@ -31,10 +31,11 @@ Was die Akte schützt, was eine gültige Beweiskette beweist – und was nicht. 
   im Verlauf des Browsers; nach der Einrichtung ist er dort wertlos. Wer ganz sicher gehen will, legt das erste Konto
   an, bevor er einen Agenten startet (Doppelklick auf `START-AKTE`), und prüft auf der Seite, dass das Konto seins
   ist.
-* **`.env` nur für dich.** Der Starter beschränkt die Rechte der Datei auf dein Benutzerkonto (Windows: `icacls`,
-  ohne geerbte Rechte; macOS und Linux: `chmod 600`). Sie enthält den geheimen Schlüssel der Akte. Leg den Ordner der
-  Akte nicht in OneDrive, Dropbox oder einen anderen Cloud-Ordner (unter Windows sind Desktop und Dokumente oft
-  welche): Sonst landet `.env` in der Cloud.
+* **`.env` nur für dich.** Der Starter beschränkt die Rechte der Datei auf dein Benutzerkonto (Windows: nur dein
+  Konto in der Zugriffsliste, ohne geerbte Rechte; macOS und Linux: `chmod 600`). Andere Konten ohne Adminrechte
+  lesen sie nicht; Administratoren des Rechners kommen wie an jede Datei trotzdem heran. Sie enthält den geheimen
+  Schlüssel der Akte. Leg den Ordner der Akte nicht in OneDrive, Dropbox oder einen anderen Cloud-Ordner (unter
+  Windows sind Desktop und Dokumente oft welche): Sonst landet `.env` in der Cloud.
 * **Protokolle auf verwalteten Rechnern:** Ist auf dem Rechner PowerShell-Protokollierung (Modul- oder
   Skriptblock-Protokoll, Transkription) oder eine Prozess-Überwachung mit Befehlszeilen eingeschaltet, wie oft auf
   Firmen-PCs, können der Einrichtungscode (Befehlszeile des Browsers) und der Token (Befehlszeile von
