@@ -45,14 +45,14 @@ You need Windows 10 or 11, about 10 GB of free disk space, internet access and a
 
 ## For AI agents
 
-Follow [AGENTS.md](AGENTS.md) step by step (raw text: `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/die-akte/v0.2.0-rc.1/AGENTS.md`).
+Follow [AGENTS.md](AGENTS.md) step by step (raw text: `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/die-akte/v0.2.0-rc.2/AGENTS.md`).
 In short, on Windows (PowerShell):
 
 1. Check Docker; if missing, ask your human, then `winget install -e --id Docker.DockerDesktop --accept-source-agreements --accept-package-agreements`.
    The human picks “All-users installation” if asked, restarts, presses a key in the WSL window, clicks “Accept”
    if Docker shows an agreement, and resumes with `claude --continue`.
 2. If `$env:USERPROFILE\Akte\compose.yaml` is missing: download
-   `https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.1.zip`, extract it and copy the contents of the
+   `https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.zip`, extract it and copy the contents of the
    inner folder `die-akte-…` into `$env:USERPROFILE\Akte` (an empty `Akte` folder is fine; if it holds anything
    else, ask your human first).
 3. `powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Akte\start\akte.ps1" start -Still` (allow 10 minutes).
@@ -65,7 +65,7 @@ In short, on Windows (PowerShell):
    without a code: `cd "$env:USERPROFILE\Akte"; docker compose exec api python manage.py akte_einrichten` (asks for
    name and password). You never read `.env`, never ask for the code and never type or ask for passwords.
 5. `… akte.ps1 agent -Still` installs uv if needed, fetches the token without printing it and runs
-   `claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.2.0-rc.1.zip#subdirectory=mcp" akte-mcp`.
+   `claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.2.0-rc.2.zip#subdirectory=mcp" akte-mcp`.
 6. The human restarts Claude: `/exit`, then `claude --continue`. If `/mcp` then shows `akte` with ✗, the human
    selects `akte` and “Reconnect” (the very first start can take longer than Claude waits).
 
@@ -77,7 +77,7 @@ anything; only a human can, in the browser. macOS and Linux:
 ## Manual start
 
 Install Docker Desktop (choose “All-users installation”), download the release ZIP
-(https://github.com/ThePyth0nKid/die-akte/releases/tag/v0.2.0-rc.1), extract it, then double-click
+(https://github.com/ThePyth0nKid/die-akte/releases/tag/v0.2.0-rc.2), extract it, then double-click
 `start\START-AKTE.cmd`. The starter waits for Docker, builds the app and opens
 http://localhost:8080/akte/einrichten with your setup code filled in (no console shows the code). After the first
 account exists, the starter deletes the code from `.env`. `start\AGENT-VERBINDEN.cmd` connects Claude Code.
@@ -120,13 +120,13 @@ docker compose exec api python manage.py akte_token YOUR-ACCOUNT
 ```
 
 ```
-claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=YOUR-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.1.zip#subdirectory=mcp" akte-mcp
+claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=YOUR-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.zip#subdirectory=mcp" akte-mcp
 ```
 
 ## Verify the evidence chain
 
 ```
-uv tool install --python 3.12 "akte-mcp[beweis] @ https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.1.zip#subdirectory=mcp"
+uv tool install --python 3.12 "akte-mcp[beweis] @ https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.zip#subdirectory=mcp"
 ```
 
 ```

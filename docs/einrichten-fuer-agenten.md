@@ -149,7 +149,7 @@ Was passiert, in dieser Reihenfolge:
 4. uv wird installiert, falls es fehlt: feste Version 0.12.21 des offiziellen Installers von astral.sh. Der
    Starter lädt die Datei, vergleicht ihre SHA-256-Prüfsumme mit der im Starter hinterlegten und führt sie nur bei
    Gleichheit aus (sonst 8, mit Grund).
-5. Vorwärmen: `uvx --python 3.12 --from "…/v0.2.0-rc.1.zip#subdirectory=mcp" akte --help` lädt Python 3.12 und die Pakete
+5. Vorwärmen: `uvx --python 3.12 --from "…/v0.2.0-rc.2.zip#subdirectory=mcp" akte --help` lädt Python 3.12 und die Pakete
    einmal (sonst 11). So läuft Claude Code beim ersten Start nicht in seine Zeitgrenze.
 6. Der Token kommt aus `docker compose exec -T api python manage.py akte_token KONTO`, ohne Anzeige (sonst 12).
 7. Alte Einträge `akte` werden entfernt (`claude mcp remove akte -s local` und `-s user`), dann:

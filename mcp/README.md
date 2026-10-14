@@ -18,7 +18,7 @@ Am einfachsten über den Starter der Akte (`AGENT-VERBINDEN`). Von Hand, eine Ze
 Python 3.12, kein Git nötig; `DEIN-TOKEN` aus `manage.py akte_token KONTO`):
 
 ```sh
-claude mcp add --scope user akte -e AKTE_BASIS=http://localhost:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.1.zip#subdirectory=mcp" akte-mcp
+claude mcp add --scope user akte -e AKTE_BASIS=http://localhost:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.zip#subdirectory=mcp" akte-mcp
 ```
 
 Ohne `AKTE_TOKEN` läuft der Server im Lesemodus.
@@ -26,7 +26,7 @@ Ohne `AKTE_TOKEN` läuft der Server im Lesemodus.
 ## Kommandozeile
 
 ```sh
-uv tool install --python 3.12 "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.1.zip#subdirectory=mcp"
+uv tool install --python 3.12 "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.zip#subdirectory=mcp"
 export AKTE_BASIS=http://localhost:8080 AKTE_TOKEN=…
 akte boards
 akte import paket.json          # Probelauf
