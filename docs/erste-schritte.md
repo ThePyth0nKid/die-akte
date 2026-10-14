@@ -62,9 +62,9 @@ unterschreibst.
 
 ![Claude Code: Security notes](bilder/claude-sicherheitshinweis.png)
 
-**Dem Ordner vertrauen.** Claude fragt, ob du dem Ordner `Recherche` vertraust. Wähl „Yes, proceed“. Fragt es das
-für deinen ganzen Benutzerordner, hast du Claude im falschen Ordner gestartet: „No, exit“ und zurück zum Schritt
-davor.
+**Dem Ordner vertrauen.** Claude fragt, ob du dem Ordner `Recherche` vertraust. Vorausgewählt ist „No, exit“:
+Drück einmal den Pfeil nach unten auf „Yes, I trust this folder“ und dann Enter. Fragt es das für deinen ganzen
+Benutzerordner, hast du Claude im falschen Ordner gestartet: „No, exit“ und zurück zum Schritt davor.
 
 ![Claude Code fragt, ob du dem Ordner Recherche vertraust](bilder/claude-ordner-vertrauen.png)
 

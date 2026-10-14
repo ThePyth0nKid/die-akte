@@ -289,6 +289,8 @@ pruefe "agent: Rückgabe 0 und Schlusssatz" \
 pruefe "agent: Token erscheint nie in der Ausgabe" "$(! enthaelt "$aus" "ATTRAPPExTOKENxATTRAPPExTOKENxATTRAPPExx"; echo $?)" "$aus"
 pruefe "agent: claude mcp add wie im Vertrag" \
   "$(grep -qF "claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:$PORT -e AKTE_TOKEN=ATTRAPPExTOKENxATTRAPPExTOKENxATTRAPPExx -- uvx --python 3.12 --from $quelle akte-mcp" "$PROTOKOLL"; echo $?)" "$(cat "$PROTOKOLL")"
+pruefe "agent: vorwärmen mit dem Server selbst (Python 3.12)" \
+  "$(grep -qF "uvx --python 3.12 --from $quelle akte-mcp --selbsttest" "$PROTOKOLL"; echo $?)" "$(cat "$PROTOKOLL")"
 pruefe "agent: Konto-Suche über akte_konten" "$(grep -q 'manage.py akte_konten' "$PROTOKOLL"; echo $?)" "$(cat "$PROTOKOLL")"
 pruefe "agent nach der Einrichtung: Code aus .env gelöscht" "$([ -z "$(env_code "$ordner")" ]; echo $?)" "$(cat "$ordner/.env")"
 UMGEBUNG=("${MIT_DATEN[@]}")

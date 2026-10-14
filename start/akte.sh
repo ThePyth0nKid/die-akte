@@ -724,8 +724,10 @@ befehl_agent() {
     sag_farbe "$GRUEN" "uv ist installiert."
   fi
 
+  # Vorwärmen mit dem Server selbst (--selbsttest), nicht nur der CLI: sonst läuft Claudes erster Start in die
+  # Zeitgrenze (Durchlauf 3, wie in akte.ps1).
   sag "Ich lade den Akte-Baustein für Claude (einmalig, bis zu 2 Minuten) …"
-  if ! ausgabe="$("$uvx" --python 3.12 --from "$MCP_QUELLE" akte --help 2>&1)"; then
+  if ! ausgabe="$("$uvx" --python 3.12 --from "$MCP_QUELLE" akte-mcp --selbsttest 2>&1)"; then
     sag_farbe "$ROT" "Der Akte-Baustein ließ sich nicht laden."
     printf '%s\n' "$ausgabe" | tail -n 15 | sed 's/^/  /'
     sag "Quelle: $MCP_QUELLE"

@@ -404,12 +404,14 @@ def bauen(akte: Akte) -> FastMCP:
     @werkzeug(annotations=SCHREIBEN_NETZ)
     def import_paket(paket: dict[str, Any], dry_run: bool = True, bestaetigt: bool = False) -> dict:
         """Größere Mengen auf einmal: {board?: {titel, slug, eltern?}, quellen: [{schluessel, titel, url,
-        herausgeber, guete, abgerufen_am}], entitaeten: [{schluessel, name, typ, oeffentliche_person, …}],
-        verbindungen: [{von, nach, typ, beschreibung, start: "JJJJ-MM-TT", bis: "JJJJ-MM-TT" ODER aktuell: true,
-        belege: [{quelle: <schluessel>, zitat_woertlich, fundstelle}]}]}. Zeitraum gleich mitgeben: ``start``
-        immer, ``bis`` wenn beendet, ``aktuell``=true wenn es heute noch besteht. Erst mit dry_run=true prüfen
-        (meldet Fehler und unter ``hinweise`` fehlende Zeiträume); geschrieben wird nur mit dry_run=false UND
-        bestaetigt=true. Danach zitat_pruefen für die neuen Belege."""
+        herausgeber, guete, abgerufen_am}], entitaeten: [{schluessel, name, typ, kurzbeschreibung,
+        oeffentliche_person, …}], verbindungen: [{von, nach, typ, beschreibung, start: "JJJJ-MM-TT", bis:
+        "JJJJ-MM-TT" ODER aktuell: true, belege: [{quelle: <schluessel>, zitat_woertlich, fundstelle (höchstens
+        120 Zeichen)}]}]}. Zeitraum gleich mitgeben: ``start`` immer, ``bis`` wenn beendet, ``aktuell``=true wenn es
+        heute noch besteht. Erst mit dry_run=true prüfen (meldet Fehler und zu lange Felder, unter ``hinweise``
+        fehlende Zeiträume und unbekannte Felder); geschrieben wird nur mit dry_run=false UND bestaetigt=true. Kein
+        Alles-oder-nichts: Bricht ein echter Import ab, bleibt Angelegtes stehen; derselbe Aufruf noch einmal macht
+        weiter (Vorhandenes wird erkannt). Danach zitat_pruefen für die neuen Belege."""
         if not dry_run and not bestaetigt:
             return {"fehler": True, "text": "Echter Import nur mit bestaetigt=true (nach einem Probelauf)."}
         try:
@@ -467,6 +469,15 @@ def _weg_oeffentlich(waende: list[dict], von: str, nach: str, nur_belegt: bool, 
 
 
 def main() -> None:
+    if sys.argv[1:] == ["--selbsttest"]:
+        # Vorwärmen (Starter, Befehl „agent“): lädt alles, was der Server beim Start braucht, und endet sofort.
+        # Sonst übersetzt Python die Pakete erst beim ersten Start in Claude, und der läuft in Claudes Zeitgrenze
+        # (Durchlauf 3: „akte“ ✗ nach dem Neustart, „Reconnect“ ging dann).
+        import mcp.server.stdio  # noqa: F401
+
+        bauen(Akte("http://127.0.0.1:9", None, kennung="akte-mcp/0.2"))
+        print("akte-mcp bereit")
+        return
     basis = os.environ.get("AKTE_BASIS", "").strip()
     if not basis:
         print("AKTE_BASIS fehlt (Adresse deiner Akte, z. B. http://localhost:8080).", file=sys.stderr)

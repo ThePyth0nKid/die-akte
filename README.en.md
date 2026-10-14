@@ -50,7 +50,7 @@ In short, on Windows (PowerShell):
 
 1. Check Docker; if missing, ask your human, then `winget install -e --id Docker.DockerDesktop --accept-source-agreements --accept-package-agreements`.
    The human picks “All-users installation” if asked, restarts, presses a key in the WSL window, clicks “Accept”
-   and resumes with `claude --continue`.
+   if Docker shows an agreement, and resumes with `claude --continue`.
 2. If `$env:USERPROFILE\Akte\compose.yaml` is missing: download
    `https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.1.zip`, extract it and copy the contents of the
    inner folder `die-akte-…` into `$env:USERPROFILE\Akte` (an empty `Akte` folder is fine; if it holds anything
@@ -66,10 +66,12 @@ In short, on Windows (PowerShell):
    name and password). You never read `.env`, never ask for the code and never type or ask for passwords.
 5. `… akte.ps1 agent -Still` installs uv if needed, fetches the token without printing it and runs
    `claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.2.0-rc.1.zip#subdirectory=mcp" akte-mcp`.
-6. The human restarts Claude: `/exit`, then `claude --continue`.
+6. The human restarts Claude: `/exit`, then `claude --continue`. If `/mcp` then shows `akte` with ✗, the human
+   selects `akte` and “Reconnect” (the very first start can take longer than Claude waits).
 
 Rules: never handle passwords, never read `.env` or ask for the setup code, never print the token, ask before
-installing anything. You cannot release or sign anything; only a human can, in the browser. macOS and Linux:
+installing anything, and write everything the human reads in the human's language. You cannot release or sign
+anything; only a human can, in the browser. macOS and Linux:
 `bash ~/Akte/start/akte.sh start --still` and the same commands with `--json`, `--still`.
 
 ## Manual start

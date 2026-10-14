@@ -80,6 +80,8 @@ Mac und Linux: [docs/erste-schritte.md](docs/erste-schritte.md#mac-und-linux). O
 6. **Zeit lassen.** Start und Verbinden dauern beim ersten Mal mehrere Minuten. Gib diesen Befehlen 10 Minuten
    (Claude Code: `timeout` 600000) oder starte sie im Hintergrund und frag danach mit `status -Json` ab. Bricht ein
    Befehl wegen der Zeit ab, ruf ihn noch einmal auf; Docker macht dort weiter, wo es war.
+7. **In der Sprache deines Menschen.** Alles, was er liest, schreibst du in seiner Sprache, auch die kurzen Sätze
+   zwischen zwei Befehlen. Schreibt er deutsch, schreibst du deutsch.
 
 Unter Windows sind alle Befehle für PowerShell geschrieben. Hast du nur eine Bash (Git Bash), setz
 `powershell -NoProfile -Command '…'` um den Befehl.
@@ -106,7 +108,8 @@ Danach braucht Windows einen Neustart. Sag deinem Menschen vorher genau das (fü
 aktuellen Arbeitsordner ein):
 
 > Starte jetzt den PC neu. Nach dem Neustart: Will ein schwarzes Fenster „Windows-Subsystem für Linux …“ eine
-> Taste, drück sofort eine Taste. Im Docker-Fenster klickst du „Accept“; anmelden musst du dich bei Docker nicht.
+> Taste, drück sofort eine Taste. Zeigt Docker einen Vertrag, klickst du „Accept“; anmelden musst du dich bei
+> Docker nicht.
 > Dann öffnest du PowerShell, tippst `cd ORDNER` und danach `claude --continue`. Dann mache ich weiter.
 
 ### Schritt 2: Die Akte holen
@@ -200,7 +203,9 @@ Starters:
 > Fertig. Beende Claude (/exit) und starte es neu mit: claude --continue
 
 Meldet der Starter, dass er den Pfad neu eingetragen hat, gehört dazu: in einem neuen Terminal-Fenster, im selben
-Ordner (`cd ORDNER`). Nach dem Neustart zeigt `/mcp` den Eintrag `akte` als verbunden.
+Ordner (`cd ORDNER`). Nach dem Neustart zeigt `/mcp` den Eintrag `akte` als verbunden. Fehlen dir danach die
+Werkzeuge der Akte oder steht in `/mcp` bei `akte` ein ✗, sag deinem Menschen: „Tipp `/mcp`, wähl `akte` und dann
+`Reconnect`.“ Beim allerersten Start braucht der Baustein manchmal länger, als Claude wartet.
 
 ### Schritt 7: Erster Auftrag
 
@@ -220,6 +225,11 @@ Für eine eigene Recherche: Such zusätzlich zum Schlagwort der Debatte immer na
 echten Test fand die Suche nach „Chatkontrolle“ im Lobbyregister nur Gegner; die Befürworter standen unter der
 amtlichen Bezeichnung der EU-Verordnung. Schreib einen Negativbefund deshalb nur mit den Suchwörtern, die du
 benutzt hast („Mit A, B und C fand ich keinen Eintrag“).
+
+Stellungnahmen und Gutachten im Lobbyregister öffnen sich erst nach einem Klick auf einen Hinweis zum Urheberrecht;
+die Akte sichert dann nur diese Hinweisseite, und `zitat_pruefen` findet das Zitat nicht. Bitte deinen Menschen,
+die PDF im Browser zu öffnen und am Faden auf „PDF oder Screenshot hierher ziehen“ abzulegen; danach prüfst du das
+Zitat noch einmal. Die Detailansicht eines Registereintrags (PDF) sichert die Akte ohne diesen Umweg.
 
 ### Wenn etwas schiefgeht
 

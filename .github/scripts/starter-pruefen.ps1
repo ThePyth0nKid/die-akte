@@ -453,7 +453,7 @@ try {
     $erwartetMcp = "claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:$Port -e AKTE_TOKEN=ATTRAPPExTOKENxATTRAPPExTOKENxATTRAPPExx -- uvx --python 3.12 --from $quelle akte-mcp"
     Pruefe 'agent: claude mcp add wie im Vertrag' ($aufrufe.Contains($erwartetMcp)) $aufrufe
     Pruefe 'agent: alter Eintrag wird vorher entfernt' ($aufrufe.Contains('claude mcp remove akte -s user')) $aufrufe
-    Pruefe 'agent: vorwärmen mit Python 3.12' ($aufrufe.Contains("uvx --python 3.12 --from $quelle akte --help")) $aufrufe
+    Pruefe 'agent: vorwärmen mit dem Server selbst (Python 3.12)' ($aufrufe.Contains("uvx --python 3.12 --from $quelle akte-mcp --selbsttest")) $aufrufe
     Pruefe 'agent: Konto-Suche über akte_konten (Redaktion oder Superuser)' ($aufrufe -match 'manage\.py akte_konten') $aufrufe
     Pruefe 'agent: Token für das einzige Redaktionskonto' ($aufrufe -match 'akte_token testkonto') $aufrufe
     Pruefe 'agent nach der Einrichtung: Code aus .env gelöscht' (([string](Env-Code $ordner)) -eq '') ([IO.File]::ReadAllText((Join-Path $ordner '.env')))

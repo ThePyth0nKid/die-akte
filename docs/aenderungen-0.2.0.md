@@ -20,7 +20,9 @@ unterschreibt. Der Agent schreibt nur Entwürfe.
 * **`status -Json`** für Agenten: `docker`, `akte`, `url`, `einrichtung_offen`, `einrichtung_grund`,
   `agent_verbunden`. Bei Fehlern `{"fehler": "…"}`.
 * **Claude verbinden mit einem Befehl** (`agent`): uv in fester Version mit geprüfter Prüfsumme, Benutzer-Pfad,
-  Token ohne Anzeige, `claude mcp add --scope user … --python 3.12 …` aus der Release-ZIP, vorgewärmt.
+  Token ohne Anzeige, `claude mcp add --scope user … --python 3.12 …` aus der Release-ZIP, vorgewärmt. Das
+  Vorwärmen lädt den Server selbst (`akte-mcp --selbsttest`), nicht nur die Kommandozeile: Sonst lief Claudes erster
+  Start in seine Zeitgrenze, und `/mcp` zeigte `akte` mit ✗.
 * `.env` ist nur für das eigene Benutzerkonto lesbar (Windows: Zugriffsliste nur mit diesem Konto, sonst
   `chmod 600`).
 * `compose.yaml` mit Healthchecks, damit `docker compose up --wait` erst zurückkehrt, wenn die Akte antwortet.
@@ -37,6 +39,12 @@ unterschreibt. Der Agent schreibt nur Entwürfe.
 * **Unterschreiben verständlich:** eigener Dialog in Klartext statt Browser-Rückfrage, Siegel an unterschriebenen
   Karten und Fäden, Zähler „X unterschrieben · Y Entwürfe“.
 * **Import mit Zeitraum:** Verbindungen in `import_paket` nehmen `start`, `bis` und `aktuell`.
+* **Import prüft vorab, was sonst erst beim Schreiben scheitert:** Der Probelauf meldet zu lange Felder (etwa
+  `fundstelle` über 120 Zeichen) als Fehler und unbekannte Felder unter `hinweise`; `beschreibung` an einer Karte
+  gilt als `kurzbeschreibung`. Bricht ein echter Import trotzdem ab, bleibt Angelegtes stehen, und derselbe Aufruf
+  macht weiter (so steht es jetzt auch in der Werkzeugbeschreibung).
+* **Erstes Konto, noch keine Wand:** Die Übersicht zeigt „Neues Board“ und „Noch keine Wand“, nicht mehr „Hier ist
+  noch nichts freigeschaltet. Anmelden“.
 
 ## Sicherheit und Datenschutz
 

@@ -13,10 +13,10 @@ geben.
 
 | Schritt | Du (Agent) | Dein Mensch |
 |---|---|---|
-| 1 Docker | prüfst, installierst nach seinem Ja mit winget | klickt „Ja“, wählt „All-users installation“, startet den PC neu, drückt im WSL-Fenster eine Taste, klickt „Accept“ |
+| 1 Docker | prüfst, installierst nach seinem Ja mit winget | klickt „Ja“, startet den PC neu, drückt im WSL-Fenster eine Taste; „Accept“ und „All-users installation“ nur, falls Docker danach fragt |
 | 2 Akte holen | lädst die Release-ZIP nach `%USERPROFILE%\Akte` | – |
 | 3 Starten | `akte.ps1 start -Still` | sieht den Browser mit der Seite „Erstes Konto anlegen“ aufgehen, der Einrichtungscode ist schon eingetragen |
-| 4 Erstes Konto | prüfst mit `status -Json`, ob die Einrichtung offen ist, und sagst ihm, was zu tun ist | wählt Benutzername und Passwort, beantwortet die Frage nach archive.org; ist keine Seite offen: Doppelklick auf `START-AKTE`, das Fenster zeigt den Code |
+| 4 Erstes Konto | prüfst mit `status -Json`, ob die Einrichtung offen ist, und sagst ihm, was zu tun ist | wählt Benutzername und Passwort, beantwortet die Frage nach archive.org; ist keine Seite offen: Doppelklick auf `START-AKTE`, der Starter öffnet sie neu, mit dem Code |
 | 5 Verbinden | `akte.ps1 agent -Still` | – |
 | 6 Neustart | sagst den Schlusssatz | beendet Claude mit `/exit`, startet `claude --continue` |
 | 7 Erster Auftrag | lädst die Demo, liest die Wand | unterschreibt im Browser, was stimmt |
@@ -167,6 +167,9 @@ Datei nicht weitergibt.
 | `uvx` oder `git` „wurde nicht als Name eines Cmdlet … erkannt“ | uv fehlt; Git braucht die Akte nicht mehr. | Der Starter installiert uv. |
 | `Git executable not found` oder ein frisch installiertes Programm fehlt | Ein Terminal-Fenster kennt nur die Pfade von seinem Start. | Neues Terminal-Fenster öffnen. |
 | In `/mcp` steht `akte` nicht | Claude Code läuft noch mit den alten Einstellungen. | Neustart: `/exit`, `claude --continue`. |
+| Gleich nach dem ersten Neustart: `/mcp` zeigt `akte ✗ failed`, nach „Reconnect“ ist es verbunden | Der erste Start des Bausteins dauerte länger, als Claude wartet (Starter vor v0.2.0-rc.2 luden ihn nur halb vor). | Dein Mensch: `/mcp`, `akte` wählen, „Reconnect“. |
+| Gesicherte Quelle aus dem Lobbyregister zeigt nur „Hinweise zum Urheberrecht“; `zitat_pruefen`: nicht gefunden | Stellungnahmen öffnen sich erst nach einem Klick auf einen Hinweis; die Akte sichert die Hinweisseite. | Dein Mensch öffnet die PDF im Browser und legt sie am Faden auf „PDF oder Screenshot hierher ziehen“; danach `zitat_pruefen`. |
+| `import_paket` meldet „höchstens … Zeichen“ oder unter `hinweise` „Unbekannte Felder“ | Ein Feld ist länger, als die Akte speichert (z. B. `fundstelle` 120 Zeichen), oder heißt anders (Karten: `kurzbeschreibung`). | Kürzen bzw. umbenennen und den Probelauf wiederholen. Bricht ein echter Import trotzdem ab, bleibt Angelegtes stehen; derselbe Aufruf noch einmal macht weiter. |
 
 ### 6. Neustart
 

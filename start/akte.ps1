@@ -913,9 +913,10 @@ function Befehl-Agent {
         Schreib 'uv ist installiert.' Green
     }
 
-    # Vorwärmen: Python 3.12 und Pakete einmal laden, damit Claude beim ersten Start nicht in die Zeitgrenze läuft.
+    # Vorwärmen: Python 3.12, Pakete und den Server selbst einmal laden (--selbsttest), damit Claude beim ersten
+    # Start nicht in seine Zeitgrenze läuft. Nur die CLI (akte --help) reichte nicht: Durchlauf 3, „akte“ ✗.
     Schreib 'Ich lade den Akte-Baustein für Claude (einmalig, bis zu 2 Minuten) …'
-    $r = Invoke-Nativ $uvx @('--python', '3.12', '--from', $McpQuelle, 'akte', '--help') -Ordner $StartOrdner -Sekunden 900 -Fortschritt {
+    $r = Invoke-Nativ $uvx @('--python', '3.12', '--from', $McpQuelle, 'akte-mcp', '--selbsttest') -Ordner $StartOrdner -Sekunden 900 -Fortschritt {
         param($s) if ($s % 30 -eq 0) { Schreib "  … lädt noch ($s Sekunden)" }
     }
     if ($r.Code -ne 0) {

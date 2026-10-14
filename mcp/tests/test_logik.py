@@ -166,6 +166,67 @@ def test_import_schreibt_bis_als_ende():
     assert (faden["start"], faden["ende"], faden["aktuell"]) == ("2017-01-01", "2020-12-31", False)
 
 
+def test_import_prueft_feldlaengen_vor_dem_schreiben():
+    # Durchlauf 3: Probelauf „sauber“, echter Import scheiterte an einer Fundstelle über 120 Zeichen.
+    import pytest
+
+    gut = _paket(belege=[{"quelle": "q", "fundstelle": "S" * 120}])
+    gut["quellen"] = [{"schluessel": "q", "titel": "Registereintrag"}]
+    aktionen._paket_pruefen(gut)
+    zu_lang = [_paket(belege=[{"quelle": "q", "fundstelle": "S" * 121}]), _paket(beschreibung="b" * 301),
+               {**_paket(), "board": {"titel": "T" * 201, "slug": "t"}}]
+    zu_lang[0]["quellen"] = [{"schluessel": "q", "titel": "Registereintrag"}]
+    for paket in zu_lang:
+        with pytest.raises(ValueError, match="höchstens"):
+            aktionen._paket_pruefen(paket)
+    with pytest.raises(ValueError, match=r"belege\[1\]\.fundstelle: höchstens 120 Zeichen, hier 121"):
+        aktionen._paket_pruefen(zu_lang[0])
+    karte = {**_PAKET_FADEN, "entitaeten": [{"schluessel": "a", "name": "N" * 201, "typ": "firma"}]}
+    with pytest.raises(ValueError, match=r"entitaeten\[1\]\.name"):
+        aktionen._paket_pruefen(karte)
+    # Zahlen und None sind keine Längenfehler; eine lange „beschreibung“ neben „kurzbeschreibung“ wird nicht gespeichert.
+    aktionen._paket_pruefen({"quellen": [{"schluessel": "q", "titel": 2024, "herausgeber": None}],
+                             "entitaeten": [{"schluessel": "a", "name": "A", "typ": "firma", "x": 12.5,
+                                             "kurzbeschreibung": "kurz", "beschreibung": "b" * 400}]})
+    with pytest.raises(ValueError, match=r"entitaeten\[1\]\.beschreibung"):
+        aktionen._paket_pruefen({"entitaeten": [{"schluessel": "a", "name": "A", "typ": "firma",
+                                                 "beschreibung": "b" * 301}]})
+    with pytest.raises(ValueError, match=r"verbindungen\[1\]\.typ"):
+        aktionen._paket_pruefen(_paket(typ="t" * 31))
+
+
+def test_import_meldet_unbekannte_felder():
+    paket = _paket(start="2017-01-01", aktuell=True, belege=[{"quelle": "q", "seite": 4}])
+    paket["quellen"] = [{"schluessel": "q", "titel": "Registereintrag", "sprache": "de"}]
+    paket["entitaeten"] = [{**paket["entitaeten"][0], "beschreibung": "Landesregierung"}, paket["entitaeten"][1]]
+    paket["karten"] = []
+    hinweise = aktionen.importieren(_AkteAttrappe(), paket, trocken=True)["hinweise"]
+    assert len(hinweise) == 1
+    for stelle in ("karten (oben)", "quellen[1].sprache", "verbindungen[1].belege[1].seite"):
+        assert stelle in hinweise[0]
+    assert "beschreibung" not in hinweise[0]
+    paket["entitaeten"][0]["kurzbeschreibung"] = "Behörde"
+    hinweise = aktionen.importieren(_AkteAttrappe(), paket, trocken=True)["hinweise"]
+    assert "entitaeten[1].beschreibung (es gilt kurzbeschreibung)" in hinweise[0]
+
+
+def test_import_nimmt_beschreibung_an_karten_als_kurzbeschreibung():
+    akte = _Schreiber()
+    angelegt = {}
+
+    def entitaet(name, typ, kurz, *rest):
+        angelegt[name] = kurz
+        return {"id": len(angelegt), "status": "entwurf"}, True
+
+    akte.entitaet = entitaet
+    akte.patch = lambda *a, **k: None
+    paket = _paket(start="2017-01-01", aktuell=True)
+    paket["entitaeten"] = [{**paket["entitaeten"][0], "beschreibung": "Landesregierung"},
+                           {**paket["entitaeten"][1], "kurzbeschreibung": "Datenanalyse"}]
+    aktionen.importieren(akte, paket, trocken=False)
+    assert angelegt == {"Senat": "Landesregierung", "Nordlicht": "Datenanalyse"}
+
+
 def test_zitat_pruefen_eine_anfrage_ohne_warten():
     class Akte:
         def __init__(self):
@@ -322,6 +383,19 @@ def test_wand_lesen_kuerzt_lange_freitexte():
                  beleg["zitat"], beleg["fundstelle"], beleg["url"], kurz["faeden"][0]["befunde"][0],
                  kurz["zettel"][0]["text"]):
         assert len(text) <= TEXT_MAX + 20 and text.endswith("[gekürzt]")
+
+
+def test_selbsttest_laedt_den_server_ohne_akte(monkeypatch, capsys):
+    # Vorwärmen der Starter (Durchlauf 3): ohne AKTE_BASIS, ohne laufende Akte, Rückgabe 0.
+    import sys
+
+    from akte_mcp import server
+
+    monkeypatch.delenv("AKTE_BASIS", raising=False)
+    monkeypatch.setattr(sys, "argv", ["akte-mcp", "--selbsttest"])
+    server.main()
+    assert capsys.readouterr().out.strip() == "akte-mcp bereit"
+    assert "mcp.server.stdio" in sys.modules
 
 
 def test_fehler_der_akte_sind_als_daten_gekennzeichnet():

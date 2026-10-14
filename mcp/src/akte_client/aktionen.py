@@ -230,6 +230,22 @@ _DATUM = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 BOARD_SLUGS_RESERVIERT = frozenset({"einrichten"})
 #: Verbindungsarten, die keinen Zeitraum brauchen (wie die Prüfregel „zeitraum_offen“ der Akte).
 _OHNE_ZEITRAUM = {"aussage", "gesetz_betrifft"}
+#: Höchstlängen wie in ``akte.models``. Ein zu langer Wert scheitert sonst erst beim Schreiben, wenn Quellen und
+#: Karten davor schon angelegt sind (Durchlauf 3: eine „fundstelle“ über 120 Zeichen, der Probelauf war „sauber“).
+_LAENGEN = {"quellen": {"titel": 300, "url": 1000, "herausgeber": 200, "guete": 20},
+            "entitaeten": {"name": 200, "typ": 20, "kurzbeschreibung": 300, "wikidata_qid": 20},
+            "verbindungen": {"typ": 30, "beschreibung": 300, "waehrung": 3, "aussageart": 20}}
+_LAENGEN_BELEG = {"fundstelle": 120}
+_LAENGEN_BOARD = {"titel": 200, "slug": 220}
+#: Felder, die der Import kennt. Andere ignoriert er und meldet sie unter ``hinweise``, damit nichts still verloren
+#: geht. „beschreibung“ an einer Karte gilt als „kurzbeschreibung“ (so schreiben Agenten es oft).
+_FELDER = {"quellen": {"schluessel", "titel", "url", "herausgeber", "guete", "abgerufen_am", "veroeffentlicht_am"},
+           "entitaeten": {"schluessel", "name", "typ", "kurzbeschreibung", "beschreibung", "oeffentliche_person",
+                          "notiz_md", "auf_board", "x", "y", "bild_url", "bild_nachweis", "wikidata_qid"},
+           "verbindungen": {"von", "nach", "typ", "beschreibung", "start", "bis", "ende", "aktuell", "betrag",
+                            "waehrung", "aussageart", "belege"}}
+_FELDER_BELEG = {"quelle", "zitat_woertlich", "fundstelle"}
+_FELDER_BOARD = {"titel", "slug", "beschreibung", "eltern"}
 
 
 def _datum(wert: Any, wo: str, fehler: list[str]) -> date | None:
@@ -262,8 +278,35 @@ def _zeitraum_pruefen(v: dict, wo: str) -> list[str]:
     return fehler
 
 
+def _zu_lang(eintrag: dict, grenzen: dict[str, int], wo: str) -> list[str]:
+    return [f"{wo}.{feld}: höchstens {n} Zeichen, hier {len(str(eintrag[feld]))}"
+            for feld, n in grenzen.items() if eintrag.get(feld) is not None and len(str(eintrag[feld])) > n]
+
+
+def _unbekannte_felder(daten: dict) -> list[str]:
+    """Felder, die der Import ignoriert, als Hinweis (Stelle und Name)."""
+    funde = [f"{k} (oben)" for k in daten if k not in {"board", *_FELDER}]
+    if isinstance(daten.get("board"), dict):
+        funde += [f"board.{k}" for k in sorted(set(daten["board"]) - _FELDER_BOARD)]
+    for teil, erlaubt in _FELDER.items():
+        for i, eintrag in enumerate(daten.get(teil) or [], 1):
+            if not isinstance(eintrag, dict):
+                continue
+            funde += [f"{teil}[{i}].{k}" for k in sorted(set(eintrag) - erlaubt)]
+            if teil == "entitaeten" and eintrag.get("kurzbeschreibung") and eintrag.get("beschreibung"):
+                funde.append(f"{teil}[{i}].beschreibung (es gilt kurzbeschreibung)")
+            if teil == "verbindungen":
+                for j, b in enumerate(eintrag.get("belege") or [], 1):
+                    if isinstance(b, dict):
+                        funde += [f"{teil}[{i}].belege[{j}].{k}" for k in sorted(set(b) - _FELDER_BELEG)]
+    if not funde:
+        return []
+    mehr = f" (und {len(funde) - 15} weitere)" if len(funde) > 15 else ""
+    return [f"Unbekannte Felder, werden ignoriert: {', '.join(funde[:15])}{mehr}"]
+
+
 def _paket_pruefen(daten: dict) -> None:
-    """Fehlende Pflichtfelder als ``ValueError`` mit Stelle, nicht als ``KeyError`` mitten im Import."""
+    """Fehlende Pflichtfelder und zu lange Werte als ``ValueError`` mit Stelle, vor dem ersten Schreiben."""
     if not isinstance(daten, dict):
         raise ValueError("Das Paket ist ein Objekt {board?, quellen, entitaeten, verbindungen}.")
     fehler = []
@@ -279,16 +322,24 @@ def _paket_pruefen(daten: dict) -> None:
             fehlt = [f for f in felder if not str(eintrag.get(f) or "").strip()]
             if fehlt:
                 fehler.append(f"{teil}[{i}]: {', '.join(fehlt)} fehlt")
+            fehler += _zu_lang(eintrag, _LAENGEN[teil], f"{teil}[{i}]")
+            if teil == "entitaeten" and not eintrag.get("kurzbeschreibung"):
+                # „beschreibung“ zählt nur, wo sie als Kurzbeschreibung gespeichert wird.
+                fehler += _zu_lang(eintrag, {"beschreibung": 300}, f"{teil}[{i}]")
             if teil == "verbindungen":
                 for j, b in enumerate(eintrag.get("belege") or [], 1):
                     if not isinstance(b, dict) or not b.get("quelle"):
                         fehler.append(f"verbindungen[{i}].belege[{j}]: quelle fehlt")
+                    if isinstance(b, dict):
+                        fehler += _zu_lang(b, _LAENGEN_BELEG, f"verbindungen[{i}].belege[{j}]")
                 fehler += _zeitraum_pruefen(eintrag, f"verbindungen[{i}]")
     if "board" in daten and not (isinstance(daten["board"], dict) and daten["board"].get("slug")
                                  and daten["board"].get("titel")):
         fehler.append("board braucht slug und titel")
     elif "board" in daten and str(daten["board"]["slug"]).strip().lower() in BOARD_SLUGS_RESERVIERT:
         fehler.append(f"board.slug {daten['board']['slug']!r} braucht die Oberfläche selbst; bitte eine andere Kennung")
+    elif "board" in daten:
+        fehler += _zu_lang(daten["board"], _LAENGEN_BOARD, "board")
     if not fehler:
         # Querverweise vor dem ersten Schreiben: sonst stünden Quellen und Karten schon da, wenn ein Faden scheitert.
         q = {x["schluessel"] for x in daten.get("quellen", [])}
@@ -323,6 +374,7 @@ def importieren(akte: Akte, daten: dict, trocken: bool = True) -> dict:
     """
     _paket_pruefen(daten)
     bericht = ImportBericht(trocken=trocken)
+    bericht.hinweise += _unbekannte_felder(daten)
     quellen: dict[str, int | None] = {}
     im_paket_q: dict[tuple, int | None] = {}
     for q in daten.get("quellen", []):
@@ -357,8 +409,8 @@ def importieren(akte: Akte, daten: dict, trocken: bool = True) -> dict:
         if trocken:
             entitaeten[e["schluessel"]] = im_paket_e[name.casefold()] = None
             continue
-        obj, _ = akte.entitaet(name, e["typ"], e.get("kurzbeschreibung", ""), e.get("oeffentliche_person", False),
-                               e.get("notiz_md", ""))
+        obj, _ = akte.entitaet(name, e["typ"], e.get("kurzbeschreibung") or e.get("beschreibung", ""),
+                               e.get("oeffentliche_person", False), e.get("notiz_md", ""))
         entitaeten[e["schluessel"]] = im_paket_e[name.casefold()] = obj["id"]
         neu = bild_aenderung(obj, e)
         if neu:
