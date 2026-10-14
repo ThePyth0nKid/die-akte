@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Download, Plus } from "lucide-react"
+import ErstesKontoHinweis, { useEinrichtungOffen } from "@/components/akte/ErstesKonto"
 import KontoKnopf from "@/components/akte/KontoKnopf"
 import { akte, AkteFehler } from "@/lib/akte/api"
 import type { Board } from "@/lib/akte/typen"
@@ -16,6 +17,8 @@ export default function AkteStart() {
   // Mitglieder bekommen nur freigeschaltete Boards mit darf_bearbeiten = false.
   const redaktion = boards?.some((b) => b.darf_bearbeiten) ?? false
   const router = useRouter()
+  // Noch kein Konto in der Akte: statt „Hier ist noch nichts freigeschaltet“ der Weg zum ersten Konto.
+  const einrichtungOffen = useEinrichtungOffen()
 
   // Lesende (Mitglieder, Besucher ohne Konto) landen direkt auf der Hauptwand, wenn es genau eine gibt:
   // So reicht ein kurzer Link auf /akte.
@@ -97,7 +100,8 @@ export default function AkteStart() {
       )}
 
       {boards === null && !fehler && <p className="text-[#8A94A0]">Lädt …</p>}
-      {boards?.length === 0 && (
+      {boards?.length === 0 && einrichtungOffen && <ErstesKontoHinweis />}
+      {boards?.length === 0 && !einrichtungOffen && (
         <p className="text-[#8A94A0]">
           Hier ist noch nichts freigeschaltet.{" "}
           <Link href="/login?redirect=%2Fakte" className="underline">Anmelden</Link>

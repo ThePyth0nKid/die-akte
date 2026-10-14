@@ -13,7 +13,7 @@ SPDX-FileCopyrightText = "2026 ThePyth0nKid und Mitwirkende"
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
-path = ["docs/**", "demo/**", "README.md", "README.en.md", "CONTRIBUTING.md", "SECURITY.md"]
+path = ["docs/**", "demo/**", "README.md", "README.en.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 ThePyth0nKid und Mitwirkende"
 SPDX-License-Identifier = "CC-BY-4.0"

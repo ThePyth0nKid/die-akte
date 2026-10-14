@@ -4,12 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "akte-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP-Server, Client und CLI für Die Akte – Ermittler-Wand mit Belegpflicht"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+# Obergrenze: uv nähme sonst das neueste Python (3.15), für das es noch kein fertiges PyYAML gibt; ohne C-Compiler
+# scheitert dann die Installation (Durchlauf 14.10.2026, G64).
+requires-python = ">=3.10,<3.15"
 dependencies = [
   "mcp>=1.12,<2",
   "requests>=2.33",
@@ -17,8 +19,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Signaturen prüfen (akte pruefe-signaturen): das Paket akte-beweis aus demselben Repo.
-beweis = ["akte-beweis @ git+https://github.com/ThePyth0nKid/die-akte@v0.1.0#subdirectory=beweis"]
+# Signaturen prüfen (akte pruefe-signaturen): das Paket akte-beweis aus demselben Repo, als Release-ZIP (ohne Git).
+beweis = ["akte-beweis @ https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=beweis"]
 test = ["pytest>=8", "responses>=0.25"]
 
 [project.scripts]

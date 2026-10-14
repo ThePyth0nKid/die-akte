@@ -4,8 +4,13 @@
     python manage.py akte_einrichten --benutzer anna     # Passwort wird verdeckt abgefragt
     python manage.py akte_einrichten --benutzer anna --token   # zusätzlich ein Token für Werkzeuge und MCP
 
+    python manage.py akte_einrichten --falls-keins       # nur, solange es noch kein Redaktionskonto gibt
+
 Ohne Terminal (z. B. in Skripten) kommt das Passwort aus der Umgebungsvariable ``AKTE_PASSWORT``.
 Das Token wird nur einmal angezeigt; ``manage.py akte_token <konto> --neu`` erzeugt ein neues.
+
+Der gewöhnliche Weg ist seit 0.2 das erste Konto im Browser (``/akte/einrichten`` mit dem Einrichtungscode aus
+``.env``); dieser Befehl bleibt der Notweg.
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from rest_framework.authtoken.models import Token
 
-from akte.permissions import REDAKTION_GRUPPE
+from akte.permissions import REDAKTION_GRUPPE, redaktion_eingerichtet
 
 
 class Command(BaseCommand):
@@ -32,8 +37,13 @@ class Command(BaseCommand):
         parser.add_argument("--token", action="store_true", help="Token für Werkzeuge und MCP ausgeben")
         parser.add_argument("--admin", action="store_true",
                             help="zusätzlich Zugang zur Django-Verwaltung (/admin; im Docker-Betrieb nicht erreichbar)")
+        parser.add_argument("--falls-keins", action="store_true",
+                            help="nichts tun, wenn es schon ein aktives Redaktionskonto gibt (für Starter-Skripte)")
 
     def handle(self, *args, **opts):
+        if opts["falls_keins"] and redaktion_eingerichtet():
+            self.stdout.write("Es gibt schon ein Redaktionskonto; nichts zu tun.")
+            return
         gruppe, _ = Group.objects.get_or_create(name=REDAKTION_GRUPPE)
         benutzer = opts["benutzer"] or input("Benutzername: ").strip()
         if not benutzer:

@@ -15,7 +15,7 @@ Die Prüfung **berät**, der Mensch **entscheidet**. Jede Regel ist einzeln eins
 | `ohne_quelle` | Faden ohne Beleg | hinweis |
 | `quelle_ohne_adresse` | Quelle ohne Link und ohne Datei | hinweis |
 | `quelle_ohne_abruf` | Quelle ohne Abrufdatum | hinweis |
-| `quelle_ohne_archiv` | Quelle ohne Archivkopie | hinweis |
+| `quelle_ohne_archiv` | Quelle ohne Archivkopie bei archive.org. Ist archive.org aus (Standard), zählt die gesicherte eigene Kopie (Original oder Anhang mit Prüfsumme); der Hinweis kommt dann nur ohne eigene Kopie: „Keine gesicherte Kopie der Quelle – Sicherung erneut anstoßen.“ | hinweis |
 | `verdacht_ohne_anhoerung` | Verdacht gegen eine Person ohne Anhörung | hinweis |
 | `verdacht_zu_duenn` | Verdacht mit weniger als zwei unabhängigen Quellen | hinweis |
 | `ohne_start` | Faden ohne Startdatum | hinweis |

@@ -29,9 +29,11 @@ def _liste(name: str, standard: str = "", trenner: str = ",") -> list[str]:
 
 
 DEBUG = _schalter("DJANGO_DEBUG")
-# Testlauf (schneller Hash, keine Drosseln, Wegwerf-Schlüssel) nur, wenn wirklich ``manage.py test`` läuft.
-# Ein AKTE_TESTLAUF=1 in einer .env im Betrieb bleibt wirkungslos.
-TESTLAUF = os.environ.get("AKTE_TESTLAUF") == "1" and sys.argv[1:2] == ["test"]
+# Testlauf (schneller Hash, keine Drosseln, Wegwerf-Schlüssel) nur mit ausdrücklichem AKTE_TESTLAUF=1 UND wenn
+# wirklich Tests laufen: ``manage.py test`` (setzt es selbst) oder pytest (``aktesite/settings_pytest.py`` setzt es,
+# eingetragen in pytest.ini). Ein AKTE_TESTLAUF=1 in einer .env im Betrieb bleibt wirkungslos.
+_UNTER_PYTEST = "pytest" in sys.modules and bool(os.environ.get("PYTEST_VERSION"))
+TESTLAUF = os.environ.get("AKTE_TESTLAUF") == "1" and (sys.argv[1:2] == ["test"] or _UNTER_PYTEST)
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
     if DEBUG or TESTLAUF:
@@ -68,6 +70,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Einstellungen der Akte (archive.org) einmal je Anfrage lesen, nicht einmal je Faden der Prüfung.
+    "akte.einstellungen.JeAnfrage",
 ]
 
 ROOT_URLCONF = "aktesite.urls"
@@ -149,6 +153,11 @@ REST_FRAMEWORK = {
         "akte_mitglied": os.environ.get("AKTE_DROSSEL_MITGLIED", "300/hour"),
         "akte_oeffentlich": os.environ.get("AKTE_DROSSEL_OEFFENTLICH", "120/min"),
         "akte_export": os.environ.get("AKTE_DROSSEL_EXPORT", "10/min"),
+        # Live-Aktualisierung der Wand: die Oberfläche fragt alle paar Sekunden nach dem Stand (Redaktion ungebremst).
+        "akte_stand": os.environ.get("AKTE_DROSSEL_STAND", "120/min"),
+        # Erstes Konto: Lesen, ob offen (Oberfläche, Starter), und falsche Codes über alle Absender zusammen.
+        "einrichtung_lesen": os.environ.get("AKTE_DROSSEL_EINRICHTUNG_LESEN", "120/min"),
+        "einrichtung_gesamt": os.environ.get("AKTE_DROSSEL_EINRICHTUNG_GESAMT", "30/hour"),
     },
     # Zahl der eigenen Proxys vor der API (für die IP in X-Forwarded-For bei den Drosseln). 0 = nur die
     # Verbindungsadresse; nie None, denn dann glaubte DRF einem X-Forwarded-For, den jeder selbst setzen kann.
@@ -171,6 +180,12 @@ CELERY_TASK_IGNORE_RESULT = True
 CELERY_TASK_ALWAYS_EAGER = _schalter("AKTE_CELERY_EAGER", not os.environ.get("REDIS_URL"))
 CELERY_TASK_EAGER_PROPAGATES = False
 
+# Hintergrund-Arbeit (Beweissicherung, Fundstellen) – die Anfrage wartet nie darauf (akte/hintergrund.py):
+# "thread" = ein Arbeiter-Thread mit Warteschlange im API-Prozess (Standard ohne Redis; SQLite verträgt keinen
+# zweiten Prozess), "celery" = Celery-Worker (Standard mit REDIS_URL), "sofort" = gleich in der Anfrage (Tests, Demo).
+AKTE_HINTERGRUND = (os.environ.get("AKTE_HINTERGRUND", "").strip().lower()
+                    or ("thread" if CELERY_TASK_ALWAYS_EAGER else "celery"))
+
 # ─── Die Akte ─────────────────────────────────────────────────────────────────
 # Lesen ohne Konto: aus, bis du bewusst einschaltest.
 AKTE_OEFFENTLICH_AKTIV = _schalter("AKTE_OEFFENTLICH_AKTIV")
@@ -190,8 +205,13 @@ _SPEICHER_DA = bool(AKTE_S3_BUCKET or AKTE_SPEICHER_LOKAL)
 AKTE_SICHERUNG_AKTIV = _schalter("AKTE_SICHERUNG_AKTIV", _SPEICHER_DA)
 # Seitenbild und Fundstellen in Webseiten brauchen Chromium (Playwright). PDFs gehen ohne.
 AKTE_BROWSER_AKTIV = _schalter("AKTE_BROWSER_AKTIV", False)
-# archive.org: Quellen dort zusätzlich hinterlegen lassen (die URL geht an archive.org). Aus = nur eigene Kopie.
-AKTE_ARCHIV_AKTIV = _schalter("AKTE_ARCHIV_AKTIV", True)
+# archive.org: Quellen dort zusätzlich hinterlegen lassen (die URL geht an archive.org und wird öffentlich). Aus =
+# nur eigene Kopie. Standard aus; die Redaktion entscheidet beim ersten Konto bzw. unter „Regeln“ (Einstellung in der
+# Datenbank, akte/einstellungen.py). Dieser Wert gilt nur, solange dort nichts gespeichert ist.
+AKTE_ARCHIV_AKTIV = _schalter("AKTE_ARCHIV_AKTIV", False)
+# Erstes Konto im Browser (/akte/einrichten): Code aus .env, vom Starter erzeugt (8 Zeichen, angezeigt als XXXX-XXXX).
+# Leer oder kürzer als 8 Zeichen = Einrichtung im Browser geschlossen. Gilt nur, solange es kein Redaktionskonto gibt.
+AKTE_EINRICHTUNGSCODE = os.environ.get("AKTE_EINRICHTUNGSCODE", "")
 # Optional: archive.org-Schlüssel "zugang:geheim" für die zuverlässige Save-Page-Now-API.
 AKTE_ARCHIVE_ORG_SCHLUESSEL = os.environ.get("AKTE_ARCHIVE_ORG_SCHLUESSEL", "")
 # O-Ton-Einspieler in Fahrten dürfen nur aus diesen Ordnern kommen (Trenner ";"). Leer = Funktion aus.
@@ -223,12 +243,23 @@ if TESTLAUF:
     AKTE_BROWSER_AKTIV = False
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
+    AKTE_HINTERGRUND = "sofort"
+    AKTE_EINRICHTUNGSCODE = ""
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
     REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = []
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
     import tempfile as _tempfile
 
-    AKTE_GERAETESCHLUESSEL = str(Path(_tempfile.mkdtemp(prefix="akte-test-")) / "geraet_ed25519.pem")
+    import atexit as _atexit
+    import shutil as _shutil
+
+    _TESTORDNER = Path(_tempfile.mkdtemp(prefix="akte-test-"))
+    _atexit.register(_shutil.rmtree, _TESTORDNER, True)
+    AKTE_GERAETESCHLUESSEL = str(_TESTORDNER / "geraet_ed25519.pem")
+    if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+        # Test-Datenbank als Datei statt im Speicher: Dann sperrt SQLite wie im Betrieb (WAL, IMMEDIATE, Wartezeit),
+        # und Tests mit Hintergrund-Threads oder gleichzeitigen Anfragen prüfen das echte Verhalten.
+        DATABASES["default"]["TEST"] = {"NAME": str(_TESTORDNER / "test.sqlite3")}
 
 LOGGING = {
     "version": 1,

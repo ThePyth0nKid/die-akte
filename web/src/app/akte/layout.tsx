@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 export default function AkteLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
+      id="akte-wurzel"
       className={`${anton.variable} ${inter.variable} ${plex.variable} fixed inset-0 bg-[#0A0A0F] text-[#F2F7FB]`}
       style={{ fontFamily: "var(--font-akte-text), system-ui, sans-serif" }}
     >

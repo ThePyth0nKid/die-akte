@@ -6,9 +6,10 @@
 // die ein Werkzeug geschrieben hat (Rahmen, Beschreibungen).
 
 import { useEffect, useState } from "react"
-import { Globe, KeyRound, X } from "lucide-react"
+import { Archive, Globe, KeyRound, X } from "lucide-react"
 import { akte, AkteFehler } from "@/lib/akte/api"
 import { eigeneSchluessel, hierGespeichert, widerrufen, type EigenerSchluessel } from "@/lib/akte/unterschrift"
+import { useEigeneAnfrage } from "./EigeneAnfrage"
 import type { Regel, Stufe, Wand } from "@/lib/akte/typen"
 
 const STUFEN: { wert: Stufe; name: string }[] = [
@@ -41,6 +42,12 @@ export default function RegelnDialog({ slug, oeffentlich, schliessen, geaendert 
   const [laeuft, setLaeuft] = useState(false)
   const [vorschau, setVorschau] = useState<Wand | null>(null)
   const [istOeffentlich, setIstOeffentlich] = useState(oeffentlich)
+  // Für die ganze Akte: archive.org. null = noch nicht geladen; Fehlertext, wenn der Server die Einstellung nicht kennt.
+  const [archiv, setArchiv] = useState<boolean | null>(null)
+  const [archivMeldung, setArchivMeldung] = useState("")
+  const [archivLaeuft, setArchivLaeuft] = useState(false)
+  // Änderungen melden sich bei der Wand an: Die Live-Aktualisierung zeigt sie nicht als „neu“.
+  const eigene = useEigeneAnfrage()
 
   async function vorschauLaden() {
     setLaeuft(true)
@@ -61,7 +68,7 @@ export default function RegelnDialog({ slug, oeffentlich, schliessen, geaendert 
     if (!window.confirm(frage)) return
     setLaeuft(true)
     try {
-      await akte.boardAendern(slug, { oeffentlich: an })
+      await eigene(() => akte.boardAendern(slug, { oeffentlich: an }))
       setIstOeffentlich(an)
       setMeldung(an ? "Öffentlich." : "Nicht mehr öffentlich.")
       geaendert()
@@ -82,7 +89,33 @@ export default function RegelnDialog({ slug, oeffentlich, schliessen, geaendert 
       .then((p) => { setRegeln(p.regeln); setWahl(Object.fromEntries(p.regeln.map((r) => [r.code, r.stufe]))) })
       .catch((e) => setMeldung(e instanceof Error ? e.message : "Regeln nicht lesbar."))
     schluesselLaden().catch(() => setSchluessel([]))
+    akte.einstellungen()
+      .then((e) => setArchiv(Boolean(e.archiv_org)))
+      .catch((e) => setArchivMeldung(e instanceof AkteFehler && e.status === 404
+        ? "Diese Version der Akte kennt die Einstellung noch nicht. Bitte die Akte aktualisieren."
+        : e instanceof AkteFehler && e.status === 403
+          ? "Diese Einstellung darf nur die Redaktion ändern."
+          : "Die Einstellung konnte nicht gelesen werden."))
   }, [slug])
+
+  async function archivSetzen(an: boolean) {
+    const vorher = archiv
+    setArchiv(an)
+    setArchivLaeuft(true)
+    setArchivMeldung("")
+    try {
+      const e = await eigene(() => akte.einstellungenAendern({ archiv_org: an }))
+      setArchiv(Boolean(e.archiv_org))
+      setArchivMeldung(e.archiv_org
+        ? "Gespeichert: Quellen landen jetzt zusätzlich öffentlich bei archive.org; ältere werden im Hintergrund nachgesichert."
+        : "Gespeichert: Neue Quellen bleiben nur in deiner Akte.")
+    } catch {
+      setArchiv(vorher)
+      setArchivMeldung("Speichern fehlgeschlagen. Die Einstellung ist unverändert.")
+    } finally {
+      setArchivLaeuft(false)
+    }
+  }
 
   useEffect(() => {
     const taste = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); schliessen() } }
@@ -94,7 +127,7 @@ export default function RegelnDialog({ slug, oeffentlich, schliessen, geaendert 
     setLaeuft(true)
     setMeldung("")
     try {
-      await akte.boardAendern(slug, { regeln: neu })
+      await eigene(() => akte.boardAendern(slug, { regeln: neu }))
       const p = await akte.pruefung(slug)
       setRegeln(p.regeln)
       setWahl(Object.fromEntries(p.regeln.map((r) => [r.code, r.stufe])))
@@ -113,7 +146,7 @@ export default function RegelnDialog({ slug, oeffentlich, schliessen, geaendert 
     if (!window.confirm(text)) return
     setLaeuft(true)
     try {
-      await widerrufen(s.kid)
+      await eigene(() => widerrufen(s.kid))
       await schluesselLaden()
       setMeldung("Widerrufen.")
     } catch (e) {
@@ -239,6 +272,37 @@ export default function RegelnDialog({ slug, oeffentlich, schliessen, geaendert 
             </li>
           ))}
         </ul>
+
+        <h3 className="mb-2 mt-6 flex items-center gap-2 border-t border-[#222636] pt-5 font-semibold">
+          <Archive className="h-4 w-4" aria-hidden /> Für die ganze Akte
+        </h3>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p id="archiv-titel" className="text-sm">Quellen zusätzlich öffentlich bei archive.org sichern</p>
+            <p id="archiv-erklaerung" className="mt-1 text-sm text-[#8A94A0]">
+              Dann liegt eine öffentliche Kopie jeder Quelle bei archive.org – gut als Beweis, aber andere sehen, was du
+              sicherst. Beim Einschalten werden ältere Quellen im Hintergrund nachgesichert. Was schon bei archive.org
+              liegt, bleibt dort. Deine eigene Kopie in der Akte entsteht immer.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={archiv === true}
+            aria-labelledby="archiv-titel"
+            aria-describedby="archiv-erklaerung"
+            disabled={archiv === null || archivLaeuft}
+            onClick={() => archiv !== null && archivSetzen(!archiv)}
+            className={`relative mt-0.5 inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f0c674] disabled:cursor-not-allowed disabled:opacity-40 ${archiv ? "border-[#FF1744] bg-[#FF1744]" : "border-[#222636] bg-[#0A0A0F]"}`}
+          >
+            <span aria-hidden className={`inline-block h-5 w-5 rounded-full bg-[#F2F7FB] shadow transition-transform duration-200 ${archiv ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
+        </div>
+        <p className="mt-1 font-[family-name:var(--font-akte-mono)] text-[11px] uppercase tracking-widest text-[#8A94A0]" aria-hidden>
+          {archiv === null ? "" : archiv ? "An" : "Aus"}
+        </p>
+        {archivMeldung && <p role="status" className="mt-2 text-sm text-[#f0c674]">{archivMeldung}</p>}
+
         {meldung && <p role="status" className="mt-4 text-sm text-[#f0c674]">{meldung}</p>}
       </div>
     </div>

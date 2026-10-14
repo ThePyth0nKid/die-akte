@@ -7,7 +7,8 @@ bleibt vorbehalten:
 * freigeben, Freigegebenes ändern oder löschen, Quellen freigegebener Fäden ändern,
 * ein Board öffentlich schalten, ein veröffentlichtes Board ändern (Karten, Zettel, Rahmen, Mappen), Boards löschen,
 * eine Person als öffentliche Person kennzeichnen (sonst erscheint sie nur mit Initialen),
-* Meinungs-Zettel schreiben (sie sind in der Lese-Ansicht sichtbar).
+* Meinungs-Zettel schreiben (sie sind in der Lese-Ansicht sichtbar),
+* die Einstellungen der ganzen Akte ändern (archive.org macht jede Quell-URL öffentlich).
 
 Grund: Die Akte macht Aussagen über Personen. Die Maschine darf schnell recherchieren und vorschlagen, entscheiden
 und veröffentlichen tut ein Mensch, der dafür geradesteht.
@@ -161,6 +162,12 @@ def pruefe_zettel(request, *arten: str) -> None:
     """Meinungs-Zettel stehen in der Lese-Ansicht. Schreiben, ändern und löschen nur ein Mensch."""
     if per_werkzeug(request) and ZettelArt.MEINUNG in arten:
         raise PermissionDenied("Meinungs-Zettel schreibt nur ein Mensch. Werkzeuge legen Notizen oder Fragen an.")
+
+
+def pruefe_einstellungen(request) -> None:
+    """Ob Quellen an archive.org gehen (und damit öffentlich werden), entscheidet ein Mensch, kein Werkzeug."""
+    if per_werkzeug(request):
+        raise PermissionDenied("Die Einstellungen der Akte ändert nur ein Mensch in der Oberfläche.")
 
 
 def _hat_status(modell) -> bool:

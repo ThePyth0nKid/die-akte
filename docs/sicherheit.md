@@ -1,6 +1,6 @@
 # Sicherheit und Beweiskraft
 
-Was die Akte schützt, was eine gültige Beweiskette beweist – und was nicht. Stand: Version 0.1.
+Was die Akte schützt, was eine gültige Beweiskette beweist – und was nicht. Stand: Version 0.2.
 
 ## Grundannahmen
 
@@ -10,6 +10,44 @@ Was die Akte schützt, was eine gültige Beweiskette beweist – und was nicht. 
   Werkzeuge und Agenten benutzen ein Token (`manage.py akte_token`). Der Server unterscheidet beide.
 * **Der Server signiert nie für einen Menschen.** Der private Schlüssel eines Menschen entsteht im Browser
   (WebCrypto, Ed25519, nicht exportierbar) und verlässt ihn nie.
+* **Das erste Konto legt ein Mensch im Browser an.** Der Starter erzeugt einen Einrichtungscode (8 Zeichen aus 32,
+  also 40 Bit, in `.env`), aber nur für eine Akte, die noch keine Daten hat. Keine Konsole zeigt ihn an: nicht
+  `status -Json`, nicht die Ausgabe von `start` oder `agent`, auch nicht das Fenster nach einem Doppelklick auf
+  `START-AKTE` (ein Agent mit Pseudo-Terminal sähe für den Starter aus wie ein Fenster). Der Starter öffnet den
+  Browser selbst auf `/akte/einrichten#code=…`. Den Teil hinter `#` (das Fragment) schickt ein Browser an keinen
+  Server, er steht in keinem Protokoll der Akte, und die Seite löscht ihn sofort aus der Adresszeile. Geht kein
+  Browser auf, bleibt der Notweg `akte_einrichten` im Terminal; der braucht keinen Code. Die Einrichtung nimmt den
+  Code nur an, solange es kein aktives Konto der Redaktion gibt, vergleicht in konstanter Zeit und ist gedrosselt
+  wie die Anmeldung. Steht das erste Konto, löscht der Starter den Code aus `.env`. So öffnet auch ein später
+  deaktiviertes Konto die Einrichtung nicht mit dem alten Code wieder. Der laufende Container kennt den Code, bis er
+  neu erstellt wird (nächstes `START-AKTE` bzw. `docker compose up -d`; ein Neustart von PC oder Docker erstellt ihn
+  nicht neu). Eine Ablaufzeit hat der Code bewusst nicht: Sie wäre für Anfänger eine Stolperfalle mehr.
+* **Was das schützt und was nicht:** Die Maßnahme verhindert, dass ein Agent, der seinen Anweisungen folgt, den Code
+  versehentlich sieht, in einem Gespräch wiedergibt oder weitergibt. Gegen einen Agenten, der sich darüber
+  hinwegsetzt, hilft sie nicht. Wer eine Shell, Docker oder Lesezugriff auf deine Dateien hat, kann den Code lesen:
+  aus `.env`, aus der Umgebung des Containers oder aus der Befehlszeile des Browsers, die der Starter aufruft (dort
+  steht er, solange der Browser-Prozess läuft; bei einem schon offenen Browser nur kurz). Mit Docker braucht er ihn
+  nicht einmal: `manage.py` im Container legt Konten ohne Code an. Unter Umständen steht die Adresse samt Code auch
+  im Verlauf des Browsers; nach der Einrichtung ist er dort wertlos. Wer ganz sicher gehen will, legt das erste Konto
+  an, bevor er einen Agenten startet (Doppelklick auf `START-AKTE`), und prüft auf der Seite, dass das Konto seins
+  ist.
+* **`.env` nur für dich.** Der Starter beschränkt die Rechte der Datei auf dein Benutzerkonto (Windows: `icacls`,
+  ohne geerbte Rechte; macOS und Linux: `chmod 600`). Sie enthält den geheimen Schlüssel der Akte. Leg den Ordner der
+  Akte nicht in OneDrive, Dropbox oder einen anderen Cloud-Ordner (unter Windows sind Desktop und Dokumente oft
+  welche): Sonst landet `.env` in der Cloud.
+* **Protokolle auf verwalteten Rechnern:** Ist auf dem Rechner PowerShell-Protokollierung (Modul- oder
+  Skriptblock-Protokoll, Transkription) oder eine Prozess-Überwachung mit Befehlszeilen eingeschaltet, wie oft auf
+  Firmen-PCs, können der Einrichtungscode (Befehlszeile des Browsers) und der Token (Befehlszeile von
+  `claude mcp add`) in diesen Protokollen stehen. Wer sie lesen darf, kann beides nutzen: den Code nur bis zum ersten
+  Konto, den Token bis `akte_token NAME --neu`.
+* **Der Token eines Agenten** entsteht mit `akte_token` im Container. Der Starter (`akte.ps1 agent`, `akte.sh
+  agent`) gibt ihn nie aus und trägt ihn direkt bei Claude Code ein. Zwei Stellen, an denen er trotzdem steht: kurz
+  in der Befehlszeile von `claude mcp add` (andere Programme unter deinem Konto können die Prozessliste lesen) und
+  danach im Klartext in `.claude.json` im Benutzerordner. Einen sichereren Weg ohne Mehraufwand für Anfänger gibt es
+  in Claude Code derzeit nicht. Wer den Token hat, kann als Werkzeug Entwürfe anlegen, aber nichts freigeben.
+  Neuer Token: `akte_token NAME --neu`, danach den Agenten neu verbinden (jeder verbundene Agent braucht dann den
+  neuen). Der Baustein `akte-mcp` warnt auf stderr, wenn ein Token über `http://` an eine Adresse geht, die nicht
+  dein eigener Rechner ist; für eine Akte im Netz gehört `https://` davor.
 
 ## Was Leser sehen
 
@@ -85,7 +123,7 @@ Format: [`atlas-trace-v1`](https://github.com/ThePyth0nKid/atlas) (Prüfer unter
   veröffentlicht im Impressum).
 * **Zeitpunkt gegenüber Dritten.** Die Zeitstempel setzt der Server. Gegen einen Betreiber, der rückdatiert, hilft nur
   eine Verankerung bei einer unabhängigen Stelle (Sigstore Rekor, RFC-3161-Zeitstempel). Das ist **geplant** und noch
-  nicht Teil von 0.1.
+  nicht enthalten.
 * **Vollständigkeit über den Export hinaus.** Wer einen älteren Export zurückhält und einen neueren zeigt, fällt nur
   auf, wenn jemand beide vergleicht (gleiche Anfänge, neuere Kette verlängert die ältere) – oder mit Verankerung.
 
@@ -94,6 +132,10 @@ Format: [`atlas-trace-v1`](https://github.com/ThePyth0nKid/atlas) (Prüfer unter
 * **Abruf fremder Seiten (SSRF):** Die Beweissicherung lädt nur `http(s)` auf Port 80/443, prüft jede aufgelöste
   Adresse und jede Weiterleitung gegen private, lokale und reservierte Netze und begrenzt Größe und Zeit
   (`backend/akte/abruf.py`, Tests in `test_sicherung.py`).
+* **Nur bekannte Namen:** Der Eingang (Caddy) beantwortet nur Anfragen an die Namen in `AKTE_HOSTS` (Standard
+  `localhost 127.0.0.1 ::1 [::1]`), alles andere mit 421. Das schützt vor DNS-Rebinding: Eine fremde Webseite, deren
+  Name plötzlich auf 127.0.0.1 zeigt, kommt so nicht an die Akte. Wer die Akte unter eigener Domain betreibt, trägt
+  sie in `AKTE_HOSTS` ein ([betrieb.md](betrieb.md#für-ein-team-im-netz)).
 * **Drossel ohne Konto:** zählt die Verbindungsadresse; Proxy-Köpfen wird nur nach Einstellung geglaubt
   (`AKTE_CLIENT_IP_HEADER`, `AKTE_VERTRAUTE_PROXYS`). Der Export der Kette hat eine eigene, engere Drossel.
 * **Anmeldung:** Fehlversuche zählen je Konto *und* Absender (10 je Minute), dazu ein Deckel je Absender. Ein Fremder
@@ -104,9 +146,13 @@ Format: [`atlas-trace-v1`](https://github.com/ThePyth0nKid/atlas) (Prüfer unter
   Ändernde Anfragen an die Oberfläche müssen aus ihr selbst kommen (`Sec-Fetch-Site`/`Origin`), dazu
   `SameSite=Lax`-Cookies, `frame-ancestors 'none'`, `nosniff`. Die Django-Verwaltung ist über den Eingang nicht
   erreichbar.
-* **archive.org** bekommt keine Adressen mit Zugangsdaten, keine mit Zugangs-Parametern (signierte Links,
-  `token`, `key`, `session` …) und nichts aus dem eigenen Netz; ganz aus mit `AKTE_ARCHIV_AKTIV=false`. Jede andere
-  Quell-URL geht hinaus, sobald die Quelle angelegt ist, auch von einem Werkzeug.
+* **archive.org** ist standardmäßig aus. Einschalten kann es nur ein Mensch: beim ersten Konto oder unter „Regeln“ →
+  „Für die ganze Akte“; ein Token kann die Einstellung nicht ändern. Die Änderung wirkt sofort auf die Prüfung
+  (Regel `quelle_ohne_archiv`). Ist es an, geht jede Quell-URL hinaus, sobald
+  die Sicherung läuft, auch für Quellen, die ein Werkzeug angelegt hat. Nie hinaus gehen Adressen mit Zugangsdaten,
+  mit Zugangs-Parametern (signierte Links, `token`, `key`, `session` …) und aus dem eigenen Netz.
+* **Abruf von deinem Anschluss:** Die Beweissicherung lädt jede Quelle selbst. Die Gegenseite sieht deine IP-Adresse
+  und die Kennung „Die-Akte … Beweissicherung“. Wer das nicht will, lädt die Quelle als Datei hoch.
 * **Beweis-Speicher:** Kopien werden vollständig geschrieben und erst dann sichtbar; beim Lesen wird die Prüfsumme
   verglichen, eine veränderte Kopie wird nie ausgeliefert.
 * **Privatpersonen:** öffentlich nur mit Initialen, ohne Kennung, die sich über Boards verknüpfen ließe; Verdacht und
@@ -115,7 +161,31 @@ Format: [`atlas-trace-v1`](https://github.com/ThePyth0nKid/atlas) (Prüfer unter
   nur, was der Server selbst gesehen hat; ein lokal gemeldetes Video (Prüfsumme vom Helfer) unterschreibt er nicht.
 * **Kein Geheimnis im Repo:** gitleaks und eine Sperrliste prüfen jeden Commit (`werkzeuge/scrub/`, `.githooks/`).
 
-## Bekannte Grenzen von 0.1
+## Woher die Teile kommen (Lieferkette)
+
+Wer die Akte einrichtet, vertraut diesen Stellen. Was davon fest ist und was nicht:
+
+| Teil | Woher | Fest? | Wer vertraut wem |
+|---|---|---|---|
+| Die Akte selbst (Starter, Backend, Oberfläche) | Release-ZIP zum Git-Tag `v0.2.0` auf GitHub | Ein Tag ist ein Verweis auf einen Commit. Der Besitzer des Repos könnte ihn verschieben. Die SHA-256-Prüfsumme der ZIP steht in den Release-Notizen; vergleichen mit `Get-FileHash DATEI` bzw. `shasum -a 256 DATEI`. GitHub packt die ZIP selbst; ihre Prüfsumme bleibt in der Praxis gleich, garantiert ist das nicht. Fester ist der Commit-Hash in den Release-Notizen. | du dem Konto `ThePyth0nKid` bei GitHub |
+| Der Baustein für Claude (`akte-mcp`) | dieselbe Release-ZIP (`…/v0.2.0.zip#subdirectory=mcp`), seine Python-Pakete von PyPI | Pakete nur mit Mindest- und Höchstversion, nicht auf Prüfsummen festgelegt | du PyPI und den Paket-Autoren |
+| uv | offizieller Installer von astral.sh in der festen Version 0.12.21 | Der Starter prüft die SHA-256 der Installer-Datei gegen den Wert im Starter und führt sie sonst nicht aus. Der Installer lädt dann uv dieser Version von GitHub. | du astral.sh und GitHub |
+| Python 3.12 für den Baustein | uv lädt es (python-build-standalone) | Version 3.12, kleinere Updates offen | du astral.sh |
+| Docker Desktop | winget bzw. docker.com | neueste Version | du Docker Inc. und Microsoft (winget) |
+| Claude Code | `claude.ai/install.ps1` bzw. `install.sh` | neueste Version | du Anthropic |
+| Bausteine im Container | Docker Hub (`python:3.12-slim`, `node:22-slim`, `caddy:2.10-alpine`), PyPI (feste Versionen in `backend/requirements.txt`), npm (`web/package-lock.json`) | Basis-Abbilder nur über Tags, Pakete über feste Versionen bzw. Lock-Datei | du Docker Hub, PyPI, npm |
+
+Eine neue uv-Version kommt nur mit einer neuen Version der Akte: Datei laden, Prüfsumme bilden, beide Werte in
+`start/akte.ps1` und `start/akte.sh` eintragen. Den Installer startet der Starter ohne die Umgebungsvariablen, mit
+denen man ihn auf eine andere Download-Quelle oder einen anderen Ordner umlenken könnte (`UV_DOWNLOAD_URL`,
+`UV_INSTALLER_GITHUB_BASE_URL`, `UV_INSTALL_DIR` und verwandte). Auch seine Hinweise für den Handweg sagen: laden,
+Prüfsumme vergleichen, erst dann ausführen, nie `irm … | iex` bzw. `curl … | sh`.
+
+**Offen (später):** Der Baustein `akte-mcp` und seine Python-Pakete sind nicht auf Prüfsummen festgelegt. Geplant ist
+ein fertig gebautes Paket als Release-Anhang mit veröffentlichter Prüfsumme und festen Abhängigkeiten
+(`uv … --require-hashes`). Bis dahin vertraut man dem Tag und PyPI.
+
+## Bekannte Grenzen (Stand 0.2)
 
 * Der Browser bestätigt die Freigabe mit einer Zusammenfassung, rechnet die zu signierenden Bytes aber nicht selbst
   nach; er vertraut darin dem eigenen, lokalen Server. Weil die Nutzlast nur die Zusage trägt und das Salz erst mit

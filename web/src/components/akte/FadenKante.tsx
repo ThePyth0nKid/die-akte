@@ -6,6 +6,7 @@ import { memo } from "react"
 import { BaseEdge, EdgeLabelRenderer, useStore, type Edge, type EdgeProps } from "@xyflow/react"
 import { durchhang, fadenStil, zeitraum } from "@/lib/akte/faden"
 import type { Verbindung } from "@/lib/akte/typen"
+import Siegel from "./Siegel"
 
 export type FadenDaten = {
   verbindung: Verbindung
@@ -38,6 +39,8 @@ export const FadenKante = memo(function FadenKante({
   const zeigen = r ? r.etikett !== false && etikettDeckkraft > 0.01 : !data.gedimmt && (zoom >= ETIKETT_AB_ZOOM || selected || data.hervorgehoben)
   // Im Render-Modus zieht sich der durchgezogene Faden über die Zeit statt per CSS-Animation.
   const zieht = r && !stil.strich
+  // Siegel am Etikett: Ein Mensch hat den Faden unterschrieben. Nicht in Aufnahme und Render.
+  const unterschrieben = !data.aufnahme && !r && v.status === "freigegeben"
 
   return (
     <>
@@ -79,13 +82,18 @@ export const FadenKante = memo(function FadenKante({
             )}
             {text && (
               <span
-                className="max-w-[220px] px-2 py-0.5 text-center text-[13px] leading-tight shadow"
+                className={`max-w-[220px] px-2 py-0.5 text-center text-[13px] leading-tight shadow${unterschrieben ? " relative pl-6" : ""}`}
                 style={{
                   background: data.papier ? "#fbf8f1" : "#15161d",
                   color: data.papier ? "#141318" : "#F2F7FB",
                   border: offen ? "1px solid #FFB300" : "1px solid transparent",
                 }}
               >
+                {unterschrieben && (
+                  <span className="absolute left-0.5 top-1/2 -translate-y-1/2" title="Unterschrieben">
+                    <Siegel groesse={18} titel="Unterschrieben" />
+                  </span>
+                )}
                 {text}
                 <span className="ml-1 font-[family-name:var(--font-akte-mono)] text-[11px] opacity-60">
                   {zeitraum(v, text)}

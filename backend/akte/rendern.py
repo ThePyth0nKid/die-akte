@@ -19,6 +19,7 @@ import logging
 import re
 import sys
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from urllib.parse import urlparse
@@ -46,6 +47,10 @@ _BANNER_KNOEPFE = [
 #: Grenzen für fremde PDFs, damit ein präpariertes Dokument den Worker nicht lahmlegt.
 PDF_MAX_SEITEN = 500
 PDF_MAX_PIXEL = 6000
+
+#: pdfium (über pypdfium2) ist nicht threadsicher. Jede Benutzung in der Akte (Fundstellen hier, Zitatprüfung in
+#: ``zitatpruefung.py``) läuft unter dieser einen Sperre – Anfrage-Threads und Arbeiter-Threads teilen einen Prozess.
+PDFIUM_SPERRE = threading.RLock()
 
 
 def _host_erlaubt(schema: str, host: str, port: int) -> bool:
@@ -122,26 +127,53 @@ def _zitat_suchtext(zitat: str) -> str:
     return _kopf(stuecke[0])
 
 
-# pdfium setzt für eine Silbentrennung am Zeilenende U+FFFE in den Seitentext (im begrenzten Text U+0002);
-# dazu das weiche Trennzeichen U+00AD. Als chr() geschrieben: U+FFFE wäre im Quelltext unsichtbar.
-# Typografische Zeichen werden für die Suche einheitlich.
-_TRENNUNG = chr(0xFFFE) + chr(0x02) + chr(0xAD)
+# pdfium setzt für einen Bindestrich am Zeilenende U+FFFE in den Seitentext (im begrenzten Text U+0002), und zwar
+# OHNE Umbruch danach: „EU-⏎Verordnung“ kommt als „EU￾Verordnung“. Dazu das weiche Trennzeichen U+00AD.
+# Als chr() geschrieben: U+FFFE wäre im Quelltext unsichtbar. Typografische Zeichen werden für die Suche einheitlich.
+_MARKE = chr(0xFFFE) + chr(0x02)
+_TRENNUNG = _MARKE + chr(0xAD)
 _GLEICH = str.maketrans({"„": '"', "“": '"', "”": '"', "«": '"', "»": '"', "‚": "'", "‘": "'", "’": "'",
                          "–": "-", "—": "-", "\xa0": " "})
+#: Alle Lesarten eines Bindestrichs am Zeilenende (siehe ``_flach``); ``bleibt`` allein, wenn es keinen gibt.
+MODI = ("bleibt", "klebt", "weg", "luecke")
+_BINDESTRICH_AM_ENDE = re.compile(r"[-–—][\r\n]|[￾\x02]")
 
 
-def _flach(text: str, bindestrich: str = "bleibt") -> tuple[str, list[int]]:
+def modi_fuer(text: str) -> tuple[str, ...]:
+    """Welche Lesarten sich für diesen Text unterscheiden: alle vier nur mit einem Bindestrich am Zeilenende."""
+    return MODI if _BINDESTRICH_AM_ENDE.search(text) else ("bleibt",)
+
+
+def _flach(text: str, bindestrich: str = "bleibt", frist: float | None = None) -> tuple[str, list[int]]:
     """Text für die Suche angleichen und je Zeichen den Index im Original merken (für die Zeichenboxen).
 
-    Die Trennung fällt weg (samt Umbruch danach), jede Folge von Leerraum wird ein Leerzeichen, alles klein.
-    Ein echter Bindestrich direkt vor einem Umbruch: ``bleibt`` („Gesundheits- und“), ``klebt`` am nächsten Wort
-    („Social-Media“) oder fällt ``weg`` („Bundes-⏎regierung“ → „bundesregierung“)."""
+    ``frist`` (``time.monotonic()``): alle 65 536 Zeichen geprüft; danach ``TimeoutError`` (Zitatprüfung, 30 s).
+
+    Jede Folge von Leerraum wird ein Leerzeichen, alles klein. Ein Bindestrich am Zeilenende kann vieles sein; jede
+    Lesart ist ein Modus, gesucht wird in allen (``modi_fuer``):
+
+    * echter Bindestrich vor einem Umbruch: ``bleibt`` („Gesundheits- und“), ``klebt`` am nächsten Wort
+      („Social-Media“), fällt ``weg`` („Bundes-⏎regierung“ → „bundesregierung“); ``luecke`` wie ``bleibt``.
+    * pdfiums Marke (U+FFFE/U+0002, Bindestrich am Zeilenende ohne Umbruch): fällt in ``bleibt`` und ``weg`` weg
+      (Silbentrennung, „Bren-⏎de“), ``klebt`` als „-“ („EU-Verordnung“, Recherche-Fund 14.10.2026: daraus war
+      „EUVerordnung“ geworden), ``luecke`` als „- “ („Gesundheits- und“).
+    * das weiche Trennzeichen U+00AD fällt immer weg."""
     zeichen: list[str] = []
     index: list[int] = []
     schlucken = False
     for i, roh in enumerate(text):
+        if frist is not None and not i & 0xFFFF and time.monotonic() > frist:
+            raise TimeoutError("Frist beim Angleichen des Textes abgelaufen")
         am_umbruch = text[i + 1:i + 2] in ("\r", "\n")
         z = roh.translate(_GLEICH)  # erst angleichen, dann entscheiden („–“ am Zeilenende wie „-“)
+        if roh in _MARKE and bindestrich in ("klebt", "luecke"):
+            zeichen.append("-")
+            index.append(i)
+            if bindestrich == "luecke":
+                zeichen.append(" ")
+                index.append(i)
+            schlucken = True
+            continue
         if roh in _TRENNUNG or (z == "-" and am_umbruch and bindestrich == "weg"):
             schlucken = True
             continue
@@ -215,8 +247,8 @@ class _Seite:
         # Nur wenn der Volltext Zeichen für Zeichen zu den Indizes passt, darf im angeglichenen Text gesucht und
         # gerechnet werden (Zeichen außerhalb der BMP o. Ä. verschieben sonst die Zeichenboxen).
         self.treu = anzahl > 0 and len(self.roh) == anzahl
-        # „klebt“ und „weg“ unterscheiden sich von „bleibt“ nur bei einem Bindestrich vor einem Umbruch.
-        self.modi = ("bleibt", "klebt", "weg") if re.search(r"[-–—][\r\n]", self.roh) else ("bleibt",)
+        # Die übrigen Modi unterscheiden sich von „bleibt“ nur bei einem Bindestrich am Zeilenende (auch pdfiums Marke).
+        self.modi = modi_fuer(self.roh)
         self._flach: dict[str, tuple[str, list[int]]] = {}
 
     def flach(self, modus: str) -> tuple[str, list[int]]:
@@ -264,7 +296,7 @@ class _Volltext:
 
     def __init__(self, seiten: list[_Seite]):
         self.seiten = seiten
-        self.modi = ("bleibt", "klebt", "weg") if any(len(s.modi) > 1 for s in seiten) else ("bleibt",)
+        self.modi = MODI if any(len(s.modi) > 1 for s in seiten) else ("bleibt",)
         self._text: dict[str, tuple[str, dict[int, int]]] = {}
 
     def text(self, modus: str) -> tuple[str, dict[int, int]]:
@@ -481,9 +513,14 @@ def fundstelle_html(url: str, zitat: str) -> bytes | None:
 
 def fundstelle_pdf(pdf: bytes, zitat: str) -> bytes | None:
     """Seite mit dem Zitat rendern, Trefferzeichen gelb hinterlegen, Ausschnitt als JPEG; ``None``, wenn die Stelle
-    nicht oder nicht eindeutig gefunden wird."""
+    nicht oder nicht eindeutig gefunden wird. pdfium ist nicht threadsicher: alles unter ``PDFIUM_SPERRE``."""
     if not _suchplaene(zitat):
         return None
+    with PDFIUM_SPERRE:
+        return _fundstelle_pdf(pdf, zitat)
+
+
+def _fundstelle_pdf(pdf: bytes, zitat: str) -> bytes | None:
     import pypdfium2 as pdfium
     from PIL import Image, ImageDraw
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Beleg, Board, Entitaet, Mappe, Quelle, Sicherung, Verbindung, Verlauf
+from .models import Beleg, Board, Einstellungen, Entitaet, Mappe, Quelle, Sicherung, Verbindung, Verlauf
 
 
 class BelegInline(admin.TabularInline):
@@ -47,6 +47,12 @@ class VerlaufAdmin(admin.ModelAdmin):
     list_display = ["zeitpunkt", "objekt_art", "objekt_id", "aktion", "nutzer"]
     list_filter = ["objekt_art", "aktion"]
     readonly_fields = [f.name for f in Verlauf._meta.fields]
+
+
+@admin.register(Einstellungen)
+class EinstellungenAdmin(admin.ModelAdmin):
+    list_display = ["archiv_org", "geaendert_am", "geaendert_von"]
+    readonly_fields = ["geaendert_am", "geaendert_von"]
 
 
 @admin.register(Sicherung)

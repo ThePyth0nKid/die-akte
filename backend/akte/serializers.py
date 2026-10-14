@@ -21,6 +21,7 @@ from .models import (
     Verbindung,
     Zettel,
     ZettelArt,
+    slug_reserviert,
 )
 from .pruefung import pruefe_verbindung
 
@@ -40,7 +41,8 @@ def freier_slug(modell, text: str, ausser_pk=None) -> str:
     basis = slugify(text)[:200] or "eintrag"
     slug, n = basis, 2
     andere = modell.objects.exclude(pk=ausser_pk) if ausser_pk else modell.objects.all()
-    while andere.filter(slug=slug).exists():
+    gesperrt = modell is Board
+    while (gesperrt and slug_reserviert(slug)) or andere.filter(slug=slug).exists():
         slug, n = f"{basis}-{n}", n + 1
     return slug
 
@@ -49,6 +51,8 @@ def _slug_frei(modell, slug, instanz) -> None:
     """Der Slug-Wunsch des Nutzers: ein vergebener Slug ist ein 400, kein Serverfehler."""
     if not slug:
         return
+    if modell is Board and slug_reserviert(slug):
+        raise serializers.ValidationError({"slug": "Diese Kennung braucht die Oberfläche selbst."})
     andere = modell.objects.filter(slug=slug)
     if instanz is not None:
         andere = andere.exclude(pk=instanz.pk)
@@ -133,6 +137,11 @@ class QuelleSerializer(serializers.ModelSerializer):
         return sicherungsstand(q)
 
 
+#: Längstes wörtliches Zitat je Beleg. Ein Beleg zitiert die tragende Stelle, kein ganzes Dokument; die Zitatprüfung
+#: bleibt so in ihrer Frist (``zitatpruefung.py``).
+ZITAT_MAX = 5000
+
+
 class BelegSerializer(serializers.ModelSerializer):
     quelle = serializers.PrimaryKeyRelatedField(queryset=Quelle.objects.all())
     quelle_detail = QuelleSerializer(source="quelle", read_only=True)
@@ -141,15 +150,23 @@ class BelegSerializer(serializers.ModelSerializer):
         model = Beleg
         fields = ["id", "quelle", "quelle_detail", "zitat_woertlich", "fundstelle"]
 
+    def validate_zitat_woertlich(self, wert):
+        if len(wert or "") > ZITAT_MAX:
+            raise serializers.ValidationError(f"Höchstens {ZITAT_MAX} Zeichen. Nur die tragende Stelle zitieren, "
+                                              "Ausgelassenes mit […] kennzeichnen.")
+        return wert
+
 
 def _fundstelle_anstossen(beleg_id: int) -> None:
     from django.conf import settings
 
     # PDF-Fundstellen brauchen keinen Browser (pdfium); ob eine Webseite fotografiert wird, entscheidet die Aufgabe.
+    # Im Hintergrund: Wer einen Faden anlegt, wartet nicht auf das Bild der Fundstelle.
     if getattr(settings, "AKTE_SICHERUNG_AKTIV", True):
+        from . import hintergrund
         from .tasks import fundstelle_sichern
 
-        transaction.on_commit(lambda: fundstelle_sichern.delay(beleg_id))
+        transaction.on_commit(lambda: hintergrund.starten(fundstelle_sichern, beleg_id))
 
 
 class VerbindungSerializer(serializers.ModelSerializer):

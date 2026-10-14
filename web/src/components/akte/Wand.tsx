@@ -12,15 +12,21 @@ import {
   useNodesInitialized, useReactFlow, type Connection, type Edge, type Node, type NodeChange, applyNodeChanges,
 } from "@xyflow/react"
 import {
-  ArrowLeft, FolderPlus, Frame, GitMerge, LayoutGrid, MapPin, Paperclip, Route, Search, ShieldCheck, StickyNote,
-  Video,
+  AlertTriangle, ArrowLeft, FolderPlus, Frame, GitMerge, LayoutGrid, MapPin, Paperclip, Route, Search, ShieldCheck,
+  StickyNote, Video,
 } from "lucide-react"
-import { akte } from "@/lib/akte/api"
+import { akte, AkteFehler } from "@/lib/akte/api"
 import {
   bildZu, fadenLicht, FORMATE, licht, rahmeStation, rahmeUeberEinblendung, STANDARD, ueberblick, viewportVon, zeitplan,
   type Bild, type FokusKarte, type FormatKennung, type Kamera, type Plan, type PlanEingabe,
 } from "@/lib/akte/aufnahme"
 import { durchhang, FARBEN, zeitraum } from "@/lib/akte/faden"
+import { unterschriftZaehler, zaehlerText, type Zaehler } from "@/lib/akte/klartext"
+import {
+  LESER_INTERVALL_MS, liveEntscheidung, mitPositionen, sichtbarerUnterschied, STAND_INTERVALL_MS, standAbfragen,
+  unterschiedText, wandUnterschied,
+  type OffenePosition, type WandUnterschied,
+} from "@/lib/akte/live"
 import { eintauchKamera, MAPPE_B, MAPPE_H, mappenAdresse, pfadLesen, zurueckAdresse } from "@/lib/akte/mappen"
 import {
   etikettBreite, etikettenVersatz, etikettHoehe, freierPlatz, passendeGroesse, type Rechteck,
@@ -42,6 +48,8 @@ import KontoKnopf from "./KontoKnopf"
 import NotizLeiste from "./NotizLeiste"
 import RegelnDialog from "./RegelnDialog"
 import { FadenLesen, KarteLesen } from "./LeseAnsicht"
+import { EigeneAnfrageAnbieter } from "./EigeneAnfrage"
+import Siegel from "./Siegel"
 
 type Rahmenhilfe = "16:9" | "9:16" | null
 
@@ -55,6 +63,20 @@ const GROESSE: Record<string, { b: number; h: number }> = {
   karte: { b: 220, h: 380 }, zettel: { b: 200, h: 200 }, beweis: { b: 220, h: 300 }, mappe: { b: MAPPE_B, h: MAPPE_H },
 }
 const ART_JE_PRAEFIX: Record<string, string> = { k: "karte", z: "zettel", r: "rahmen", b: "beweis", m: "mappe" }
+
+// Anfangsausschnitt mit Abstand: oben liegt die Werkzeugleiste, unten Legende und Steuerung. Ohne den Rand klebten die
+// oberen Karten an der Leiste (G71).
+const OBEN_RAND = 120
+const SICHT_RAND = { top: `${OBEN_RAND}px`, right: "40px", bottom: "72px", left: "40px" } as const
+const FIT_OPTIONEN = { padding: SICHT_RAND }
+
+/** Rand für fitView mit der echten Höhe der Kopfleiste (sie bricht auf schmalen Bildschirmen in zwei Zeilen um). */
+function sichtRand() {
+  const kopf = document.querySelector("[data-akte-kopf]")?.getBoundingClientRect()
+  const flaeche = document.querySelector(".react-flow")?.getBoundingClientRect()
+  const oben = kopf && flaeche ? Math.max(OBEN_RAND, Math.round(kopf.bottom - flaeche.top + 32)) : OBEN_RAND
+  return { ...SICHT_RAND, top: `${oben}px` as const }
+}
 const alleKantenTypen = { ...kantenTypen, buendel: BuendelKante }
 
 /** Woher man kam: `?von=` (Weg), `?karte=` (Portal-Sprung), `?aus=` (eine Ebene zurück). */
@@ -209,17 +231,124 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
   const ausstehend = useRef(new Map<string, { art: string; id: number; x: number; y: number; breite?: number; hoehe?: number }>())
   const speicherTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const laden = useCallback(async () => {
-    try {
-      setWand(ohneFiltern(await akte.wand(slug), render?.ohne))
-      // Frische Serverdaten gewinnen; lokal bleiben nur Auswahl und Messung.
-      setLokal((alt) => Object.fromEntries(
-        Object.entries(alt).map(([id, n]) => [id, { selected: n.selected, measured: n.measured }]),
-      ))
-    } catch {
-      setFehler("Das Board konnte nicht geladen werden. Es ist nicht freigegeben, oder du bist nicht angemeldet.")
+  // ─── Laden und Live-Aktualisierung ────────────────────────────────────────
+  // Positionen, die gerade zum Server unterwegs sind: Eine frisch geladene Wand legt sie darüber (kein Zurückspringen).
+  const imFlug = useRef(new Map<string, OffenePosition>())
+  const offenePositionen = useCallback(() => new Map([...imFlug.current, ...ausstehend.current]), [])
+  const wandRef = useRef<WandDaten | null>(null)
+  useEffect(() => { wandRef.current = wand }, [wand])
+  // Neue Fassung, die noch nicht auf der Wand ist (über einem offenen Formular nur als Hinweis).
+  const [neuAufDerWand, setNeuAufDerWand] = useState<{ wand: WandDaten; unterschied: WandUnterschied } | null>(null)
+  const [neuHervor, setNeuHervor] = useState<Set<number> | null>(null)
+  const hervorZeit = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (hervorZeit.current) clearTimeout(hervorZeit.current) }, [])
+  // Zählt jede übernommene Fassung: Die Notiz-Leiste liest danach ihre Karte neu.
+  const [wandVersion, setWandVersion] = useState(0)
+  const [notizBearbeitet, setNotizBearbeitet] = useState(false)
+  // Nur die jüngste Antwort gewinnt. Eigene Arbeit (Ziehen, Aufräumen, Speichern, Hochladen, Unterschreiben, eigenes
+  // Laden) ändert den Stand auch, ist aber nicht „neu auf der Wand“. Solange sie läuft (Zähler > 0), werden
+  // Live-Antworten verworfen und ein wartender Hinweis fällt weg; danach lädt die Wand genau einmal nach.
+  const eigenNr = useRef(0)
+  const liveNr = useRef(0)
+  const eigeneArbeit = useRef(0)
+  const liveImFlug = useRef(0)
+  const nachholen = useRef(false)
+  const baldZeit = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (baldZeit.current) clearTimeout(baldZeit.current) }, [])
+  const ladenBaldRef = useRef<() => void>(() => undefined)
+
+  /** Eine Fassung auf die Wand legen: Kamera, Auswahl und Messung bleiben, gerade gezogene Positionen auch. */
+  const uebernehmen = useCallback((w: WandDaten, hervorheben: number[] = []) => {
+    const neu = mitPositionen(ohneFiltern(w, render?.ohne), offenePositionen())
+    // Sofort als Vergleichsstand: Eine Live-Antwort direkt danach vergleicht schon mit dieser Fassung.
+    wandRef.current = neu
+    setWand(neu)
+    // Frische Serverdaten gewinnen; lokal bleiben nur Auswahl und Messung.
+    setLokal((alt) => Object.fromEntries(
+      Object.entries(alt).map(([id, n]) => [id, { selected: n.selected, measured: n.measured }]),
+    ))
+    setNeuAufDerWand(null)
+    setWandVersion((n) => n + 1)
+    if (hervorheben.length) {
+      if (hervorZeit.current) clearTimeout(hervorZeit.current)
+      setNeuHervor(new Set(hervorheben))
+      hervorZeit.current = setTimeout(() => setNeuHervor(null), 2600)
     }
-  }, [slug, render?.ohne])
+  }, [render?.ohne, offenePositionen])
+
+  const laden = useCallback(async () => {
+    const nr = ++eigenNr.current
+    // Was bis jetzt verworfen wurde, bringt dieses Laden mit.
+    nachholen.current = false
+    liveNr.current++
+    eigeneArbeit.current++
+    try {
+      const w = await akte.wand(slug)
+      if (nr === eigenNr.current) uebernehmen(w)
+    } catch {
+      if (nr === eigenNr.current) {
+        setFehler("Das Board konnte nicht geladen werden. Es ist nicht freigegeben, oder du bist nicht angemeldet.")
+      }
+    } finally {
+      eigeneArbeit.current--
+      if (eigeneArbeit.current === 0 && nachholen.current) ladenBaldRef.current()
+    }
+  }, [slug, uebernehmen])
+
+  /** Einmal nachladen, gleich nach dem aktuellen Ereignis; mehrere Aufrufe kurz hintereinander laden nur einmal. */
+  const ladenBald = useCallback(() => {
+    if (baldZeit.current) return
+    baldZeit.current = setTimeout(() => { baldZeit.current = null; void laden() }, 0)
+  }, [laden])
+  useEffect(() => { ladenBaldRef.current = ladenBald }, [ladenBald])
+
+  /** Eigene Arbeit beginnt: laufende Live-Abrufe und einen wartenden Hinweis verwerfen (und später nachholen). */
+  const eigenBeginn = useCallback(() => {
+    eigeneArbeit.current++
+    if (liveImFlug.current > 0) nachholen.current = true
+    liveNr.current++
+    setNeuAufDerWand((alt) => { if (alt) nachholen.current = true; return null })
+  }, [])
+
+  /** Eigene Arbeit endet. Ist es die letzte und gab es etwas nachzuholen (oder `neuLaden`), genau einmal laden. */
+  const eigenEnde = useCallback((neuLaden: boolean) => {
+    eigeneArbeit.current = Math.max(0, eigeneArbeit.current - 1)
+    if (liveImFlug.current > 0) nachholen.current = true
+    if (neuLaden) nachholen.current = true
+    liveNr.current++
+    if (eigeneArbeit.current === 0 && nachholen.current) ladenBald()
+  }, [ladenBald])
+
+  /** Eine eigene Anfrage ausführen (CR6). `neuLaden`: danach die Wand neu laden (sonst nur, wenn etwas verworfen wurde). */
+  const eigene = useCallback(async <T,>(arbeit: () => Promise<T>, neuLaden = true): Promise<T> => {
+    eigenBeginn()
+    try {
+      return await arbeit()
+    } finally {
+      eigenEnde(neuLaden)
+    }
+  }, [eigenBeginn, eigenEnde])
+  // Für Faden-Formular, Notiz-Leiste, Regeln und Hochladen: Sie melden ihre Anfragen über den Kontext an.
+  const eigeneFuerKomponenten = useCallback(<T,>(arbeit: () => Promise<T>) => eigene(arbeit, true), [eigene])
+
+  /** Der Stand hat sich geändert: neu holen und vergleichen. Fehler hier sind still, die nächste Abfrage kommt. */
+  const liveHolen = useCallback(async () => {
+    // Eigene Arbeit läuft: gar nicht erst holen, sondern danach einmal nachladen.
+    if (eigeneArbeit.current > 0) { nachholen.current = true; return }
+    const nr = ++liveNr.current
+    liveImFlug.current++
+    try {
+      const w = await akte.wand(slug)
+      // Inzwischen eigene Arbeit oder ein neuerer Abruf: Diese Antwort ist überholt (nachgeholt wird am Ende der Arbeit).
+      if (nr !== liveNr.current || eigeneArbeit.current > 0) return
+      const u = wandUnterschied(wandRef.current, mitPositionen(ohneFiltern(w, render?.ohne), offenePositionen()))
+      if (u.geaendert) setNeuAufDerWand({ wand: w, unterschied: u })
+    } catch {
+      // Netz kurz weg oder Server startet neu: beim nächsten Stand wieder.
+    } finally {
+      liveImFlug.current--
+    }
+  }, [slug, render?.ohne, offenePositionen])
 
   useEffect(() => {
     let aktiv = true
@@ -277,15 +406,21 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
     speicherTimer.current = setTimeout(() => {
       const liste = [...ausstehend.current.values()]
       ausstehend.current.clear()
-      akte.positionen(slug, liste).catch(() => melden("Positionen nicht gespeichert."))
+      for (const e of liste) imFlug.current.set(`${e.art}-${e.id}`, e)
+      // Kein Neuladen danach: Die Wand zeigt die Positionen schon; nachgeladen wird nur, was verworfen wurde.
+      eigene(() => akte.positionen(slug, liste), false)
+        .catch(() => melden("Positionen nicht gespeichert."))
+        .finally(() => {
+          for (const e of liste) if (imFlug.current.get(`${e.art}-${e.id}`) === e) imFlug.current.delete(`${e.art}-${e.id}`)
+        })
     }, 400)
-  }, [slug, melden])
+  }, [slug, melden, eigene])
 
   const zettelSpeichern = useCallback((z: Zettel, text: string) => {
-    akte.zettelAendern(slug, z.id, { text })
+    eigene(() => akte.zettelAendern(slug, z.id, { text }), false)
       .then((neu) => setWand((w) => w && { ...w, zettel: w.zettel.map((x) => (x.id === neu.id ? neu : x)) }))
       .catch(() => melden("Zettel nicht gespeichert."))
-  }, [slug, melden])
+  }, [slug, melden, eigene])
 
   // ─── Knoten und Fäden aus den Daten bauen ─────────────────────────────────
   const karteZuEntitaet = useMemo(() => new Map(wand?.karten.map((k) => [`k-${k.id}`, k.entitaet_detail]) ?? []), [wand])
@@ -342,6 +477,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
         draggable: !gesperrt, connectable: !gesperrt, style: unscharf(hell(k.entitaet)),
         data: {
           entitaet: k.entitaet_detail, befunde: befundeJe.get(k.entitaet) ?? 0, gedimmt: gedimmt(k.entitaet), aufnahme, papier, nurLesen,
+          neu: !!neuHervor?.has(k.id),
           deckkraft: rb ? deck(hell(k.entitaet)) : undefined,
           auchIn: wand.auch_in?.[String(k.entitaet)],
           springen: (ziel: string) => {
@@ -376,7 +512,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
         },
       })),
     ]
-  }, [wand, fokus, aufnahme, gesperrt, nurLesen, papier, merkePosition, zettelSpeichern, renderBild, router, eintauchen, render?.dimm])
+  }, [wand, fokus, aufnahme, gesperrt, nurLesen, papier, merkePosition, zettelSpeichern, renderBild, router, eintauchen, render?.dimm, neuHervor])
 
   const knoten = useMemo(
     (): Node[] => basisKnoten.map((n) => (lokal[n.id] ? { ...n, ...lokal[n.id] } : n)),
@@ -523,17 +659,18 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
 
   const aufraeumen = useCallback(async () => {
     try {
-      const neu = await akte.aufraeumen(slug)
+      const neu = await eigene(() => akte.aufraeumen(slug), false)
+      wandRef.current = neu
       setWand(neu)
       setLokal((alt) => Object.fromEntries(
         Object.entries(alt).map(([id, n]) => [id, { selected: n.selected, measured: n.measured }]),
       ))
-      setTimeout(() => flow.fitView({ duration: bewegungArm() ? 0 : 700, padding: 0.08 }), 60)
+      setTimeout(() => flow.fitView({ duration: bewegungArm() ? 0 : 700, padding: sichtRand() }), 60)
       melden("Aufgeräumt: nichts liegt mehr übereinander.")
     } catch {
       melden("Aufräumen fehlgeschlagen.")
     }
-  }, [slug, flow, melden])
+  }, [slug, flow, melden, eigene])
 
   // ─── Faden ziehen und öffnen ──────────────────────────────────────────────
   const onConnect = useCallback((c: Connection) => {
@@ -565,13 +702,12 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
     }
     const p = position ?? mitte()
     try {
-      await akte.karteLegen(slug, e.id, p.x - 110, p.y - 150)
-      await laden()
+      await eigene(async () => { await akte.karteLegen(slug, e.id, p.x - 110, p.y - 150); await laden() }, false)
       setAuswahl(e.id)
     } catch {
       melden("Karte konnte nicht aufs Board.")
     }
-  }, [wand, flow, mitte, slug, laden, melden])
+  }, [wand, flow, mitte, slug, laden, melden, eigene])
 
   const linkFolgen = useCallback(async (name: string) => {
     const treffer = (await akte.suchen(name)).find((t) => t.name.toLowerCase() === name.toLowerCase())
@@ -590,40 +726,39 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
     if (fehlen.length) {
       const ka = wand!.karten.find((k) => k.entitaet === a.id)!
       const kb = wand!.karten.find((k) => k.entitaet === b.id)!
-      await Promise.all(fehlen.map((id, i) => {
-        const t = (i + 1) / (fehlen.length + 1)
-        return akte.karteLegen(slug, id, ka.x + (kb.x - ka.x) * t, ka.y + (kb.y - ka.y) * t + 260)
-      }))
-      await laden()
+      await eigene(async () => {
+        await Promise.all(fehlen.map((id, i) => {
+          const t = (i + 1) / (fehlen.length + 1)
+          return akte.karteLegen(slug, id, ka.x + (kb.x - ka.x) * t, ka.y + (kb.y - ka.y) * t + 260)
+        }))
+        await laden()
+      }, false)
       melden(`${fehlen.length} Karte(n) für den Weg dazugeholt.`)
     }
     setFokus(new Set(weg.entitaeten))
-  }, [knoten, karteZuEntitaet, entitaetZuKnoten, wand, slug, laden, melden])
+  }, [knoten, karteZuEntitaet, entitaetZuKnoten, wand, slug, laden, melden, eigene])
 
   // ─── Zettel und Rahmen ────────────────────────────────────────────────────
   const zettelNeu = useCallback(async (art: Zettel["art"]) => {
     const p = mitte()
-    await akte.zettelAnlegen(slug, { art, text: "", x: p.x - 100, y: p.y - 60 })
-    laden()
-  }, [mitte, slug, laden])
+    await eigene(() => akte.zettelAnlegen(slug, { art, text: "", x: p.x - 100, y: p.y - 60 }))
+  }, [mitte, slug, eigene])
 
   const rahmenNeu = useCallback(async (titel: string) => {
     const p = mitte()
-    await akte.rahmenAnlegen(slug, { titel, x: p.x - 400, y: p.y - 300, breite: 800, hoehe: 600 })
-    laden()
-  }, [mitte, slug, laden])
+    await eigene(() => akte.rahmenAnlegen(slug, { titel, x: p.x - 400, y: p.y - 300, breite: 800, hoehe: 600 }))
+  }, [mitte, slug, eigene])
 
   const mappeNeu = useCallback(async (ziel: string) => {
     const p = mitte()
     const belegt = knoten.map(rechteckVon).filter((r): r is Rechteck => !!r)
     const platz = freierPlatz({ x: p.x - MAPPE_B / 2, y: p.y - MAPPE_H / 2, b: MAPPE_B, h: MAPPE_H }, belegt)
     try {
-      await akte.mappeLegen(slug, ziel, platz.x, platz.y)
-      await laden()
+      await eigene(async () => { await akte.mappeLegen(slug, ziel, platz.x, platz.y); await laden() }, false)
     } catch (e) {
       melden(e instanceof Error ? e.message : "Mappe konnte nicht auf die Wand.")
     }
-  }, [mitte, knoten, slug, laden, melden])
+  }, [mitte, knoten, slug, laden, melden, eigene])
 
   const gelenkeHolen = useCallback(async () => {
     const liste = wand?.gelenke ?? []
@@ -631,65 +766,72 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
     const p = mitte()
     // Jede Karte sucht sich einen freien Platz; die übrige Wand bleibt, wie die Redaktion sie gelegt hat.
     const belegt = knoten.map(rechteckVon).filter((r): r is Rechteck => !!r)
-    const ergebnis = await Promise.allSettled(liste.map((g, i) => {
-      const platz = freierPlatz({ x: p.x + (i % 6) * 340, y: p.y + Math.floor(i / 6) * 530, b: 220, h: 380 }, belegt)
-      belegt.push({ ...platz, b: 220, h: 380 })
-      return akte.karteLegen(slug, g.id, platz.x, platz.y)
-    }))
-    await laden()
+    const ergebnis = await eigene(async () => {
+      const e = await Promise.allSettled(liste.map((g, i) => {
+        const platz = freierPlatz({ x: p.x + (i % 6) * 340, y: p.y + Math.floor(i / 6) * 530, b: 220, h: 380 }, belegt)
+        belegt.push({ ...platz, b: 220, h: 380 })
+        return akte.karteLegen(slug, g.id, platz.x, platz.y)
+      }))
+      await laden()
+      return e
+    }, false)
     const fehler = ergebnis.filter((r) => r.status === "rejected").length
     melden(fehler
       ? `${liste.length - fehler} von ${liste.length} Gelenken geholt, ${fehler} nicht.`
       : `${liste.length} Gelenk(e) auf die Wand geholt: jetzt sieht man ihre Bündel in jede Mappe.`)
-  }, [wand?.gelenke, mitte, knoten, slug, laden, melden])
+  }, [wand?.gelenke, mitte, knoten, slug, laden, melden, eigene])
 
   const onNodesDelete = useCallback(async (geloescht: Node[]) => {
-    try {
-      for (const n of geloescht) {
-        const [art, id] = n.id.split("-")
-        if (art === "k") await akte.karteEntfernen(slug, Number(id))
-        if (art === "z") await akte.zettelEntfernen(slug, Number(id))
-        if (art === "r") await akte.rahmenEntfernen(slug, Number(id))
-        if (art === "b") await akte.beweisEntfernen(slug, Number(id))
-        if (art === "m") await akte.mappeEntfernen(slug, Number(id))
+    await eigene(async () => {
+      try {
+        for (const n of geloescht) {
+          const [art, id] = n.id.split("-")
+          if (art === "k") await akte.karteEntfernen(slug, Number(id))
+          if (art === "z") await akte.zettelEntfernen(slug, Number(id))
+          if (art === "r") await akte.rahmenEntfernen(slug, Number(id))
+          if (art === "b") await akte.beweisEntfernen(slug, Number(id))
+          if (art === "m") await akte.mappeEntfernen(slug, Number(id))
+        }
+      } catch {
+        melden("Entfernen fehlgeschlagen.")
       }
-    } catch {
-      melden("Entfernen fehlgeschlagen.")
-    }
-    laden()
-  }, [slug, laden, melden])
+    })
+  }, [slug, melden, eigene])
 
   // Entf auf einem Faden löscht ihn nicht aus der Akte, er wird nur auf diesem Board ausgeblendet.
   const onEdgesDelete = useCallback(async (geloeschtAlle: Edge[]) => {
     const geloescht = geloeschtAlle.filter((e) => e.id.startsWith("f-"))
     if (!geloescht.length) return
-    try {
-      for (const e of geloescht) await akte.fadenAusblenden(slug, Number(e.id.slice(2)))
-      melden("Faden auf diesem Board ausgeblendet. Er bleibt in der Akte.")
-    } catch {
-      melden("Ausblenden fehlgeschlagen.")
-    }
-    laden()
-  }, [slug, laden, melden])
+    await eigene(async () => {
+      try {
+        for (const e of geloescht) await akte.fadenAusblenden(slug, Number(e.id.slice(2)))
+        melden("Faden auf diesem Board ausgeblendet. Er bleibt in der Akte.")
+      } catch {
+        melden("Ausblenden fehlgeschlagen.")
+      }
+    })
+  }, [slug, melden, eigene])
 
   // ─── Dateien auf die Wand ziehen → gesichertes Beweisstück ────────────────
   const dateienSichern = useCallback(async (dateien: File[], p: { x: number; y: number }) => {
     if (!dateien.length) return
     const belegt = knoten.map(rechteckVon).filter((r): r is Rechteck => !!r)
     let fehler = 0
-    for (const [i, datei] of dateien.entries()) {
-      // Neue Beweisstücke suchen sich einen freien Platz, statt auf einer Karte zu landen.
-      const platz = freierPlatz({ x: p.x - 110 + i * 260, y: p.y - 150, b: 220, h: 300 }, belegt)
-      belegt.push({ ...platz, b: 220, h: 300 })
-      try {
-        await akte.quelleAusDatei(datei, { board: slug, x: platz.x, y: platz.y })
-      } catch {
-        fehler++
+    await eigene(async () => {
+      for (const [i, datei] of dateien.entries()) {
+        // Neue Beweisstücke suchen sich einen freien Platz, statt auf einer Karte zu landen.
+        const platz = freierPlatz({ x: p.x - 110 + i * 260, y: p.y - 150, b: 220, h: 300 }, belegt)
+        belegt.push({ ...platz, b: 220, h: 300 })
+        try {
+          await akte.quelleAusDatei(datei, { board: slug, x: platz.x, y: platz.y })
+        } catch {
+          fehler++
+        }
       }
-    }
-    await laden()
+      await laden()
+    }, false)
     melden(fehler ? `${fehler} Datei(en) abgelehnt: nur PDF oder Bild, höchstens 15 MB.` : `${dateien.length} Beweisstück(e) gesichert.`)
-  }, [slug, laden, melden, knoten])
+  }, [slug, laden, melden, knoten, eigene])
 
   const dateienAblegen = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -702,12 +844,11 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
     const belegt = knoten.map(rechteckVon).filter((r): r is Rechteck => !!r)
     const platz = freierPlatz({ x: p.x - 110, y: p.y - 150, b: 220, h: 300 }, belegt)
     try {
-      await akte.beweisLegen(slug, quelleId, platz.x, platz.y)
-      await laden()
+      await eigene(async () => { await akte.beweisLegen(slug, quelleId, platz.x, platz.y); await laden() }, false)
     } catch {
       melden("Beweisstück konnte nicht an die Wand.")
     }
-  }, [mitte, slug, laden, melden, knoten])
+  }, [mitte, slug, laden, melden, knoten, eigene])
 
   // ─── Fahrten: Stationen anfahren ──────────────────────────────────────────
   const fahrt: Fahrt | undefined = wand?.fahrten.find((f) => f.id === fahrtId)
@@ -741,9 +882,8 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
     const p = mitte()
     const fokusIds = knoten.filter((n) => n.selected && n.type === "karte").map((n) => karteZuEntitaet.get(n.id)!.id)
     const neu: Station = { x: p.x, y: p.y, zoom: flow.getZoom(), fokus: fokusIds, stichwort, dauer_ms: 1400 }
-    await akte.fahrtSpeichern(slug, { ...fahrt, stationen: [...fahrt.stationen, neu] })
-    laden()
-  }, [fahrt, mitte, knoten, karteZuEntitaet, flow, slug, laden])
+    await eigene(() => akte.fahrtSpeichern(slug, { ...fahrt, stationen: [...fahrt.stationen, neu] }))
+  }, [fahrt, mitte, knoten, karteZuEntitaet, flow, slug, eigene])
 
   // ─── Gerenderte Aufnahme: Plan rechnen, dann Bild für Bild auf Zuruf ──────
   const knotenGemessen = useNodesInitialized()
@@ -894,11 +1034,74 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
         const flaeche = document.querySelector(".react-flow")?.getBoundingClientRect()
         const k = eintauchKamera({ x: m.x, y: m.y, b: MAPPE_B, h: MAPPE_H }, { b: flaeche?.width ?? 1200, h: flaeche?.height ?? 800 })
         flow.setCenter(k.x, k.y, { zoom: k.zoom, duration: 0 })
-        const t = setTimeout(() => flow.fitView({ duration: arm ? 0 : 800, padding: 0.1 }), 80)
+        const t = setTimeout(() => flow.fitView({ duration: arm ? 0 : 800, padding: sichtRand() }), 80)
         return () => clearTimeout(t)
       }
     }
   }, [render, wand, knotenGemessen, ankunft?.karte, ankunft?.aus, flow])
+
+  // Bricht die Kopfleiste in zwei Zeilen um, reicht der feste Rand oben nicht: einmal mit der echten Höhe einpassen.
+  const eingepasst = useRef(false)
+  useEffect(() => {
+    if (render || !wand || !knotenGemessen || eingepasst.current || ankunft?.karte || ankunft?.aus) return
+    eingepasst.current = true
+    const rand = sichtRand()
+    if (rand.top !== SICHT_RAND.top) flow.fitView({ padding: rand, duration: 0 })
+  }, [render, wand, knotenGemessen, ankunft?.karte, ankunft?.aus, flow])
+
+  // ─── Live: Stand abfragen, neue Fassung übernehmen oder anbieten ─────────
+  // Redaktion alle 4 s bei sichtbarem Tab und sofort beim Fokus; Leser alle 30 s (ihr Lesen ist gedrosselt, und
+  // für sie ändert sich nur Unterschriebenes). Nie im Render- oder Aufnahme-Modus.
+  const redaktion = !!wand && wand.darf_bearbeiten !== false
+  const liveAn = !render && !aufnahme && !!wand && !fehler
+  const liveHolenRef = useRef(liveHolen)
+  useEffect(() => { liveHolenRef.current = liveHolen }, [liveHolen])
+  const liveLief = useRef(false)
+  useEffect(() => {
+    if (!liveAn) return
+    // Nach einer Pause (Aufnahme) erst nachholen, was inzwischen kam.
+    if (liveLief.current) void liveHolenRef.current()
+    liveLief.current = true
+    return standAbfragen({
+      holen: (signal) => akte.stand(slug, signal).then((r) => String(r.stand)),
+      geaendert: () => { void liveHolenRef.current() },
+      intervallMs: redaktion ? STAND_INTERVALL_MS : LESER_INTERVALL_MS,
+      mindestAbstandMs: redaktion ? 1000 : 10_000,
+      // Endpunkt fehlt (ältere Akte) oder keine Leserechte mehr: nicht weiter fragen.
+      aufgeben: (e) => e instanceof AkteFehler && [401, 403, 404, 405, 501].includes(e.status),
+    })
+  }, [liveAn, redaktion, slug])
+
+  const formularOffen = !!fadenDialog || regelnOffen || befehl || aufnahmeDialog || notizBearbeitet
+  const zieht = useMemo(() => Object.values(lokal).some((n) => n.dragging), [lokal])
+  const entscheidung = neuAufDerWand
+    ? liveEntscheidung({ formularOffen, zieht, aufnahme, sichtbar: sichtbarerUnterschied(neuAufDerWand.unterschied) })
+    : null
+  useEffect(() => {
+    if (!neuAufDerWand || entscheidung !== "uebernehmen") return
+    const u = neuAufDerWand.unterschied
+    // Kein abgeleiteter Zustand: Eine schon geholte Fassung vom Server kommt auf die Wand, sobald kein Formular mehr offen
+    // ist, niemand zieht und keine Aufnahme läuft.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    uebernehmen(neuAufDerWand.wand, u.neueKartenIds)
+    if (u.neueKarten.length || u.neueFaeden) melden(unterschiedText(u))
+  }, [neuAufDerWand, entscheidung, uebernehmen, melden])
+
+  const zaehler = useMemo(() => unterschriftZaehler(wand), [wand])
+
+  // Faden einer Mappe auf dieser Wand aus- oder einblenden (aus der Bündel-Leiste).
+  const buendelFadenUmschalten = useCallback(async (v: Verbindung) => {
+    await eigene(async () => {
+      try {
+        const r = await akte.fadenAusblenden(slug, v.id)
+        melden(r.ausgeblendet
+          ? "Faden auf dieser Wand ausgeblendet. Er bleibt in der Akte und in seiner Mappe."
+          : "Faden wieder eingeblendet.")
+      } catch {
+        melden("Umschalten fehlgeschlagen.")
+      }
+    })
+  }, [slug, melden, eigene])
 
   // ─── Tastatur ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -906,7 +1109,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
       const ziel = e.target as HTMLElement
       if (ziel.closest("input, textarea, select, [contenteditable]")) return
       // Offene Dialoge haben Vorrang — außer der Beweis-Ansicht: durch sie hindurch fährt die Aufnahme weiter.
-      if (document.querySelector("[role='dialog']:not([data-beweis])")) return
+      if (document.querySelector("[role='dialog']:not([data-beweis]), [role='alertdialog']")) return
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (!nurLesen) setBefehl(true); return }
       if (e.key === "Escape") {
         beweisRunde.current++
@@ -947,6 +1150,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
   }
 
   return (
+    <EigeneAnfrageAnbieter value={eigeneFuerKomponenten}>
     <div
       className={`relative h-full w-full${render ? " akte-render" : ""}`}
       style={{ background: papier ? "#c9a878" : FARBEN.grund }}
@@ -993,7 +1197,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
         minZoom={0.1}
         maxZoom={3}
         fitView
-        fitViewOptions={{ padding: 0.1 }}
+        fitViewOptions={FIT_OPTIONEN}
         proOptions={{ hideAttribution: true }}
       >
         <Background
@@ -1025,6 +1229,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
           gelenke={wand.gelenke ?? []}
           gelenkeHolen={gelenkeHolen}
           offeneFaeden={offeneFaeden}
+          zaehler={zaehler}
           regeln={() => setRegelnOffen(true)}
           karte={() => setBefehl(true)}
           zettel={zettelNeu}
@@ -1040,7 +1245,15 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
         />
       )}
 
-      {legende && wand && <Legende aufnahme={aufnahme} papier={papier} />}
+      {legende && wand && <Legende aufnahme={aufnahme} papier={papier} werkstatt={!aufnahme && !nurLesen} />}
+
+      {neuAufDerWand && entscheidung === "hinweis" && !render && (
+        <NeuHinweis
+          text={unterschiedText(neuAufDerWand.unterschied)}
+          offenerFadenGeaendert={!!fadenDialog?.vorhanden && neuAufDerWand.unterschied.geaenderteFaeden.includes(fadenDialog.vorhanden.id)}
+          uebernehmen={() => uebernehmen(neuAufDerWand.wand, neuAufDerWand.unterschied.neueKartenIds)}
+        />
+      )}
 
       <input
         ref={dateiWahl}
@@ -1127,12 +1340,14 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
           key={auswahl}
           id={auswahl}
           schliessen={() => setAuswahl(null)}
-          geaendert={laden}
+          geaendert={ladenBald}
           fadenOeffnen={fadenOeffnen}
           linkFolgen={linkFolgen}
           karteOeffnen={(e) => karteHolen(e)}
           anDieWand={(q) => quelleAnDieWand(q.id)}
           zeigen={(q, zitat) => setBeweisAnsicht({ quelle: q, zitat })}
+          bearbeitet={setNotizBearbeitet}
+          wandVersion={wandVersion}
         />
       )}
 
@@ -1154,17 +1369,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
             titelNach={titel(bu.nach)}
             schliessen={() => setBuendelOffen(null)}
             bearbeiten={nurLesen ? undefined : (v) => fadenOeffnen(v)}
-            ausblenden={nurLesen ? undefined : async (v) => {
-              try {
-                const r = await akte.fadenAusblenden(slug, v.id)
-                melden(r.ausgeblendet
-                  ? "Faden auf dieser Wand ausgeblendet. Er bleibt in der Akte und in seiner Mappe."
-                  : "Faden wieder eingeblendet.")
-              } catch {
-                melden("Umschalten fehlgeschlagen.")
-              }
-              laden()
-            }}
+            ausblenden={nurLesen ? undefined : buendelFadenUmschalten}
           />
         )
       })()}
@@ -1192,14 +1397,14 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
       {befehl && <Befehlszeile schliessen={() => setBefehl(false)} gewaehlt={(e) => karteHolen(e)} />}
       {regelnOffen && (
         <RegelnDialog slug={slug} oeffentlich={Boolean(wand?.board.oeffentlich)} schliessen={() => setRegelnOffen(false)}
-          geaendert={() => laden()} />
+          geaendert={ladenBald} />
       )}
 
       {fadenDialog && (
         <FadenFormular
           {...fadenDialog}
           board={slug}
-          fertig={(v) => { setFadenDialog(null); if (v) laden() }}
+          fertig={(v) => { setFadenDialog(null); if (v) ladenBald() }}
         />
       )}
 
@@ -1218,6 +1423,7 @@ function WandInnen({ slug, render, ankunft }: { slug: string; render?: RenderAuf
         </p>
       )}
     </div>
+    </EigeneAnfrageAnbieter>
   )
 }
 
@@ -1230,6 +1436,7 @@ function Werkzeugleiste(p: {
   gelenke: EntitaetKurz[]
   gelenkeHolen: () => void
   offeneFaeden: number
+  zaehler: Zaehler
   regeln: () => void
   karte: () => void
   zettel: (art: Zettel["art"]) => void
@@ -1256,7 +1463,7 @@ function Werkzeugleiste(p: {
   }, [mappeOffen])
   const knopf = "flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 text-sm text-[#F2F7FB] transition-colors duration-200 hover:bg-white/10"
   return (
-    <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-1 rounded-lg border border-[#222636] bg-[#0d0e14]/90 p-1.5 backdrop-blur">
+    <div data-akte-kopf className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-1 rounded-lg border border-[#222636] bg-[#0d0e14]/90 p-1.5 backdrop-blur">
       <Link href="/akte" aria-label="Zur Übersicht" className={knopf}><ArrowLeft className="h-4 w-4" /></Link>
       {p.brotkrumen}
       <button type="button" className={knopf} onClick={p.karte} title="Strg+K"><Search className="h-4 w-4" aria-hidden /> Karte</button>
@@ -1320,6 +1527,18 @@ function Werkzeugleiste(p: {
         <ShieldCheck className="h-4 w-4" aria-hidden /> Regeln
       </button>
       <KontoKnopf />
+      {p.zaehler.unterschrieben + p.zaehler.entwuerfe > 0 && (
+        <span
+          className="ml-1 flex items-center gap-1.5 rounded-full border border-[#222636] px-3 py-1 text-xs"
+          title={`Karten: ${p.zaehler.karten[0]} von ${p.zaehler.karten[1]} unterschrieben. Fäden: ${p.zaehler.faeden[0]} von ${p.zaehler.faeden[1]} unterschrieben. Unterschreiben heißt: Ein Mensch gibt mit seinem Schlüssel frei.`}
+          aria-label={`${zaehlerText(p.zaehler)}. Karten ${p.zaehler.karten[0]} von ${p.zaehler.karten[1]}, Fäden ${p.zaehler.faeden[0]} von ${p.zaehler.faeden[1]}.`}
+        >
+          <Siegel groesse={14} />
+          <span aria-hidden>{p.zaehler.unterschrieben} unterschrieben</span>
+          <span aria-hidden className="text-[#8A94A0]">·</span>
+          <span aria-hidden className="text-[#FFB300]">{p.zaehler.entwuerfe} {p.zaehler.entwuerfe === 1 ? "Entwurf" : "Entwürfe"}</span>
+        </span>
+      )}
       {p.offeneFaeden > 0 && (
         <button type="button" onClick={p.regeln}
           className="ml-1 rounded-full bg-[#FFB300]/15 px-3 py-1 text-xs text-[#FFB300] hover:bg-[#FFB300]/25"
@@ -1335,7 +1554,7 @@ function Werkzeugleiste(p: {
 
 function LeseKopf({ brotkrumen }: { brotkrumen: React.ReactNode }) {
   return (
-    <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-lg border border-[#222636] bg-[#0d0e14]/90 p-1.5 pr-4 backdrop-blur">
+    <div data-akte-kopf className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-lg border border-[#222636] bg-[#0d0e14]/90 p-1.5 pr-4 backdrop-blur">
       <Link href="/akte" aria-label="Zur Übersicht" className="flex min-h-10 items-center rounded-md px-3 hover:bg-white/10"><ArrowLeft className="h-4 w-4" /></Link>
       {brotkrumen}
       <span className="text-xs text-[#8A94A0]">Nur lesen. Jede Verbindung trägt ihre Quelle, Meinungen stehen auf eigenen Zetteln. Die Recherche geht weiter.</span>
@@ -1344,9 +1563,40 @@ function LeseKopf({ brotkrumen }: { brotkrumen: React.ReactNode }) {
   )
 }
 
+// ─── Neu auf der Wand: Hinweis über einem offenen Formular ────────────────
+
+function NeuHinweis({ text, offenerFadenGeaendert, uebernehmen }: {
+  text: string
+  offenerFadenGeaendert: boolean
+  uebernehmen: () => void
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed left-1/2 top-4 z-[60] flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-lg border border-[#FFD54F]/60 bg-[#0d0e14] py-2 pl-3 pr-2 text-sm text-[#F2F7FB] shadow-2xl"
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <span aria-hidden className="h-8 w-1 shrink-0 bg-[#FF1744]" />
+      <span>
+        {text}
+        <span className="block text-xs text-[#8A94A0]">
+          {offenerFadenGeaendert
+            ? "Achtung: Der Faden, den du gerade bearbeitest, wurde inzwischen geändert. Dein Formular bleibt, wie es ist."
+            : "Dein offenes Formular bleibt, wie es ist."}
+        </span>
+      </span>
+      <button type="button" onClick={uebernehmen}
+        className="min-h-10 shrink-0 cursor-pointer rounded-md bg-[#FFD54F] px-4 text-sm font-semibold text-[#0A0A0F] hover:bg-[#ffe082] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f0c674]">
+        Übernehmen
+      </button>
+    </div>
+  )
+}
+
 // ─── Legende: was die Fäden bedeuten ───────────────────────────────────────
 
-function Legende({ aufnahme, papier }: { aufnahme: boolean; papier: boolean }) {
+function Legende({ aufnahme, papier, werkstatt }: { aufnahme: boolean; papier: boolean; werkstatt: boolean }) {
   const eintrag = "flex items-center gap-2"
   return (
     <div
@@ -1358,6 +1608,17 @@ function Legende({ aufnahme, papier }: { aufnahme: boolean; papier: boolean }) {
       <span className={eintrag}><svg width="34" height="6" aria-hidden><line x1="0" y1="3" x2="34" y2="3" stroke={FARBEN.rot} strokeWidth="2.5" strokeDasharray="7 5" /></svg>Verdacht</span>
       <span className={eintrag}><svg width="34" height="6" aria-hidden><line x1="0" y1="3" x2="34" y2="3" stroke={FARBEN.ocker} strokeWidth="2.5" strokeDasharray="2 5" strokeLinecap="round" /></svg>Meinung</span>
       <span className={eintrag}><svg width="34" height="6" aria-hidden><line x1="0" y1="3" x2="34" y2="3" stroke={FARBEN.gold} strokeWidth="1.5" strokeDasharray="3 6" /></svg>Beweisstück</span>
+      {werkstatt && (
+        <>
+          <span className={eintrag}><Siegel groesse={18} />Unterschrieben</span>
+          <span className={eintrag}>
+            <span aria-hidden className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#FFB300] text-black">
+              <AlertTriangle className="h-3 w-3" />
+            </span>
+            Entwurf / offene Punkte
+          </span>
+        </>
+      )}
     </div>
   )
 }
@@ -1565,5 +1826,13 @@ const WAND_CSS = `
 .akte-tauchen { animation: akte-tauchen 430ms ease-in forwards; }
 @keyframes akte-tauchen { from { opacity: 0; } 60% { opacity: 0.2; } to { opacity: 1; } }
 .akte-render, .akte-render * { transition: none !important; animation: none !important; cursor: none !important; caret-color: transparent; }
+.akte-neu > .akte-karte-blatt { animation: akte-neu 2400ms ease-out; }
+.akte-neu-stempel { animation: akte-blende 300ms ease-out; }
+@keyframes akte-neu {
+  0%, 100% { box-shadow: 0 10px 24px rgba(0,0,0,0.55); }
+  20%, 60% { box-shadow: 0 0 0 4px #FFD54F, 0 0 42px 10px rgba(255,23,68,0.55); }
+  40%, 80% { box-shadow: 0 0 0 2px #FFD54F, 0 0 16px 2px rgba(255,23,68,0.3); }
+}
+@media (prefers-reduced-motion: reduce) { .akte-neu > .akte-karte-blatt { animation: none; box-shadow: 0 0 0 3px #FFD54F, 0 10px 24px rgba(0,0,0,0.55); } }
 @media (prefers-reduced-motion: reduce) { .akte-faden-zieh, .akte-faden-blende, .akte-beweis-rein, .akte-beweis-rein .akte-blatt { animation: none; stroke-dashoffset: 0; } }
 `

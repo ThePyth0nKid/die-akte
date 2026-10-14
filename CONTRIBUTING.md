@@ -9,6 +9,9 @@ Danke, dass du helfen willst.
    * Backend: `cd backend && DJANGO_DEBUG=1 python manage.py test`
    * Web: `cd web && npm ci && npx tsc --noEmit && npx vitest run`
    * MCP und Beweis: `cd mcp && pytest`, `cd beweis && pytest`
+   * Starter (mit Attrappen, ohne Docker): `powershell -NoProfile -ExecutionPolicy Bypass -File .github\scripts\starter-pruefen.ps1`
+     unter Windows, `bash .github/scripts/starter-pruefen.sh` unter macOS und Linux. Was dabei zu beachten ist:
+     [AGENTS.md](AGENTS.md), Abschnitt „Am Code der Akte arbeiten“.
 3. Git-Hooks einschalten: `git config core.hooksPath .githooks` (gitleaks und Sperrliste vor jedem Commit).
 4. Pull Request mit kurzer Begründung.
 

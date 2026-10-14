@@ -2,9 +2,9 @@
 
 // Die Obsidian-Seite einer Karte: Notiz mit [[Links]], Fäden mit Belegen, Rückverweise.
 
-import { begruendungsFrage, freigebenMitUnterschrift, zusammenfassung } from "@/lib/akte/unterschrift"
+import { freigebenMitUnterschrift } from "@/lib/akte/unterschrift"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ExternalLink, Pencil, X } from "lucide-react"
 import { akte } from "@/lib/akte/api"
 import { wikilinks, zeitraum } from "@/lib/akte/faden"
@@ -13,6 +13,9 @@ import {
   type EntitaetDetail, type EntitaetKurz, type EntitaetTyp, type Quelle, type Status, type Verbindung,
 } from "@/lib/akte/typen"
 import QuellenVorschau from "./QuellenVorschau"
+import Siegel from "./Siegel"
+import { useEigeneAnfrage } from "./EigeneAnfrage"
+import { useUnterschrift } from "./UnterschriftDialog"
 
 interface Props {
   id: number
@@ -23,21 +26,41 @@ interface Props {
   karteOeffnen: (e: EntitaetKurz) => void
   anDieWand: (q: Quelle) => void
   zeigen: (q: Quelle, zitat?: string) => void
+  /** Meldet, ob gerade bearbeitet wird: Dann lädt die Live-Aktualisierung nichts darüber. */
+  bearbeitet?: (an: boolean) => void
+  /** Zählt hoch, wenn die Wand neu geladen wurde: Die Leiste liest ihre Karte dann neu (nicht beim Bearbeiten). */
+  wandVersion?: number
 }
 
 const feld = "min-h-10 w-full rounded border border-[#222636] bg-[#0A0A0F] px-3 text-sm outline-none focus:border-[#f0c674]"
 const etikett = "mb-1 block font-[family-name:var(--font-akte-mono)] text-[11px] uppercase tracking-widest text-[#8A94A0]"
 
-export default function NotizLeiste({ id, schliessen, geaendert, fadenOeffnen, linkFolgen, karteOeffnen, anDieWand, zeigen }: Props) {
+export default function NotizLeiste({
+  id, schliessen, geaendert, fadenOeffnen, linkFolgen, karteOeffnen, anDieWand, zeigen, bearbeitet, wandVersion = 0,
+}: Props) {
   const [e, setE] = useState<EntitaetDetail | null>(null)
   const [bearbeiten, setBearbeiten] = useState(false)
   const [entwurf, setEntwurf] = useState<Partial<EntitaetDetail>>({})
   const [fehler, setFehler] = useState("")
+  const unterschrift = useUnterschrift()
+  const eigene = useEigeneAnfrage()
+  const bearbeitenRef = useRef(false)
 
-  // Der Aufrufer hängt die Leiste je Karte neu ein (key={id}), daher kein Rücksetzen hier.
   useEffect(() => {
-    akte.entitaet(id).then((d) => { setE(d); setEntwurf(d) }).catch(() => setFehler("Karte konnte nicht geladen werden."))
-  }, [id])
+    bearbeitenRef.current = bearbeiten
+    bearbeitet?.(bearbeiten)
+  }, [bearbeiten, bearbeitet])
+  useEffect(() => () => bearbeitet?.(false), [bearbeitet])
+
+  // Der Aufrufer hängt die Leiste je Karte neu ein (key={id}), daher kein Rücksetzen hier. Kommt eine neue Fassung der
+  // Wand (wandVersion), liest die Leiste nach – aber nie über einen offenen Entwurf hinweg.
+  useEffect(() => {
+    let aktiv = true
+    akte.entitaet(id)
+      .then((d) => { if (aktiv && !bearbeitenRef.current) { setE(d); setEntwurf(d) } })
+      .catch(() => { if (aktiv) setFehler("Karte konnte nicht geladen werden.") })
+    return () => { aktiv = false }
+  }, [id, wandVersion])
 
   async function speichern() {
     if (!e) return
@@ -45,18 +68,16 @@ export default function NotizLeiste({ id, schliessen, geaendert, fadenOeffnen, l
       const { name, typ, kurzbeschreibung, bild_url, notiz_md, oeffentliche_person, status, wikidata_qid } = entwurf
       // Freigeben heißt unterschreiben: erst die Inhalte speichern, dann die Freigabe mit dem eigenen Schlüssel.
       const freigeben = status === "freigegeben" && e.status !== "freigegeben"
-      await akte.entitaetAendern(e.id, {
-        name, typ, kurzbeschreibung, bild_url, notiz_md, oeffentliche_person, status: freigeben ? e.status : status, wikidata_qid,
+      // Speichern und Unterschreiben als eine eigene Anfrage: Die Live-Aktualisierung wartet so lange.
+      const abgebrochen = await eigene(async () => {
+        await akte.entitaetAendern(e.id, {
+          name, typ, kurzbeschreibung, bild_url, notiz_md, oeffentliche_person, status: freigeben ? e.status : status, wikidata_qid,
+        })
+        return freigeben && !(await freigebenMitUnterschrift("karte", e.id, unterschrift.fragen("karte")))
       })
-      if (freigeben && !(await freigebenMitUnterschrift("karte", e.id, {
-          begruendung: (b) => window.prompt(begruendungsFrage(b)),
-          bestaetigen: (vb) => window.confirm(zusammenfassung(vb)),
-        }))) {
-        setFehler("Freigabe abgebrochen. Die Änderungen sind gespeichert, die Karte bleibt Entwurf.")
-      }
       setE(await akte.entitaet(e.id))
       setBearbeiten(false)
-      setFehler("")
+      setFehler(abgebrochen ? "Freigabe abgebrochen. Die Änderungen sind gespeichert, die Karte bleibt Entwurf." : "")
       geaendert()
     } catch (err) {
       setFehler(err instanceof Error ? err.message : "Speichern fehlgeschlagen.")
@@ -128,7 +149,13 @@ export default function NotizLeiste({ id, schliessen, geaendert, fadenOeffnen, l
           <>
             <h2 className="font-[family-name:var(--font-akte-titel)] text-4xl uppercase leading-none">{e.name}</h2>
             {e.kurzbeschreibung && <p className="mt-2 text-[#8A94A0]">{e.kurzbeschreibung}</p>}
-            {e.status !== "freigegeben" && <p className="mt-2 text-xs text-[#FFB300]">Entwurf: erscheint nicht öffentlich.</p>}
+            {e.status === "freigegeben" ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-[#F2F7FB]">
+                <Siegel groesse={16} /> Unterschrieben: Ein Mensch hat diese Karte freigegeben.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-[#FFB300]">Entwurf: noch nicht unterschrieben, erscheint nicht öffentlich.</p>
+            )}
             {e.typ === "person" && !e.oeffentliche_person && (
               <p className="mt-1 text-xs text-[#FFB300]">Privatperson: öffentlich nur als Initialen.</p>
             )}
@@ -161,6 +188,9 @@ export default function NotizLeiste({ id, schliessen, geaendert, fadenOeffnen, l
                       <span className="mt-1 block text-sm text-[#8A94A0]">
                         {v.beschreibung || "—"} · {AUSSAGE_NAMEN[v.aussageart]} · {v.belege.length} Beleg{v.belege.length === 1 ? "" : "e"}
                       </span>
+                      {v.status === "freigegeben" && (
+                        <span className="mt-1 flex items-center gap-1 text-xs"><Siegel groesse={14} /> Unterschrieben</span>
+                      )}
                       {v.befunde.length > 0 && (
                         <span className="mt-1 block text-xs text-[#FFB300]">{v.befunde.length} offene Punkte vor Veröffentlichung</span>
                       )}
@@ -228,6 +258,7 @@ export default function NotizLeiste({ id, schliessen, geaendert, fadenOeffnen, l
           </>
         )}
       </div>
+      {unterschrift.dialog}
     </aside>
   )
 }

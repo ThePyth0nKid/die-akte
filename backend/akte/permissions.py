@@ -20,6 +20,27 @@ def ist_redaktion(user) -> bool:
     return user.is_superuser or user.groups.filter(name=REDAKTION_GRUPPE).exists()
 
 
+def redaktionskonten():
+    """Alle aktiven Konten, die an der Akte arbeiten dürfen (Redaktionsgruppe oder Superuser), nach Namen.
+
+    Eine Wahrheit für die Einrichtung (``redaktion_eingerichtet``), ``akte_konten`` und ``akte_token`` ohne Namen
+    (die Starter fragen darüber, welches Konto der Agent bekommt)."""
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
+
+    return (get_user_model().objects.filter(Q(is_superuser=True) | Q(groups__name=REDAKTION_GRUPPE), is_active=True)
+            .distinct().order_by("username"))
+
+
+def redaktion_eingerichtet() -> bool:
+    """Gibt es schon ein aktives Konto, das an der Akte arbeiten darf (Redaktionsgruppe oder Superuser)?
+
+    Solange nicht, ist die Einrichtung des ersten Kontos offen (``konto.views.EinrichtungView``,
+    ``akte_einrichten --falls-keins``). Superuser zählen mit: Sie dürfen dasselbe wie die Redaktion.
+    """
+    return redaktionskonten().exists()
+
+
 def mitglieder_boards() -> set[str]:
     """Slugs der Boards, die jedes eingeloggte Konto lesen darf (``AKTE_MITGLIEDER_BOARDS``).
 
