@@ -54,7 +54,7 @@ foreach ($weiteres in $args) {
     }
 }
 
-$AkteVersion = '0.2.0'
+$AkteVersion = '0.2.0-rc.1'
 $McpQuelle = "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v$AkteVersion.zip#subdirectory=mcp"
 if ($env:AKTE_MCP_QUELLE) { $McpQuelle = $env:AKTE_MCP_QUELLE }
 # uv lädt den Akte-Baustein für Claude. Feste Version des offiziellen Installers; die geladene Datei muss genau diese

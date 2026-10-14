@@ -168,7 +168,7 @@ Wer die Akte einrichtet, vertraut diesen Stellen. Was davon fest ist und was nic
 | Teil | Woher | Fest? | Wer vertraut wem |
 |---|---|---|---|
 | Die Akte selbst (Starter, Backend, Oberfläche) | Release-ZIP zum Git-Tag `v0.2.0` auf GitHub | Ein Tag ist ein Verweis auf einen Commit. Der Besitzer des Repos könnte ihn verschieben. Die SHA-256-Prüfsumme der ZIP steht in den Release-Notizen; vergleichen mit `Get-FileHash DATEI` bzw. `shasum -a 256 DATEI`. GitHub packt die ZIP selbst; ihre Prüfsumme bleibt in der Praxis gleich, garantiert ist das nicht. Fester ist der Commit-Hash in den Release-Notizen. | du dem Konto `ThePyth0nKid` bei GitHub |
-| Der Baustein für Claude (`akte-mcp`) | dieselbe Release-ZIP (`…/v0.2.0.zip#subdirectory=mcp`), seine Python-Pakete von PyPI | Pakete nur mit Mindest- und Höchstversion, nicht auf Prüfsummen festgelegt | du PyPI und den Paket-Autoren |
+| Der Baustein für Claude (`akte-mcp`) | dieselbe Release-ZIP (`…/v0.2.0-rc.1.zip#subdirectory=mcp`), seine Python-Pakete von PyPI | Pakete nur mit Mindest- und Höchstversion, nicht auf Prüfsummen festgelegt | du PyPI und den Paket-Autoren |
 | uv | offizieller Installer von astral.sh in der festen Version 0.12.21 | Der Starter prüft die SHA-256 der Installer-Datei gegen den Wert im Starter und führt sie sonst nicht aus. Der Installer lädt dann uv dieser Version von GitHub. | du astral.sh und GitHub |
 | Python 3.12 für den Baustein | uv lädt es (python-build-standalone) | Version 3.12, kleinere Updates offen | du astral.sh |
 | Docker Desktop | winget bzw. docker.com | neueste Version | du Docker Inc. und Microsoft (winget) |

@@ -37,13 +37,13 @@ laufen gleich in PowerShell und in der Bash.
    du in `.env` unter `AKTE_PORT` und ersetzt `8080` damit):
 
    ```
-   claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=mcp" akte-mcp
+   claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.1.zip#subdirectory=mcp" akte-mcp
    ```
 
 3. Einmal vorwärmen, damit Claude beim ersten Start nicht in seine Zeitgrenze läuft:
 
    ```
-   uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=mcp" akte --help
+   uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.1.zip#subdirectory=mcp" akte --help
    ```
 
 Warum es genau so aussieht:
