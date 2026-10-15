@@ -1,6 +1,6 @@
 # Ultra-Akte 0.3.0 – was neu ist
 
-Entwurf der Release-Notizen.
+Erschienen am 15.10.2026 ([Release](https://github.com/ThePyth0nKid/ultra-akte/releases/tag/v0.3.0)).
 
 ## Neuer Name: Ultra-Akte
 
@@ -72,3 +72,7 @@ Beim Veröffentlichen eintragen:
 
 | Datei | SHA-256 | Commit |
 |---|---|---|
+| `ultra-akte-0.3.0.zip` (Source code, zip) | `33b398b0369ac3d8dbf1a4aa6c29be3f830410ed6f098437d34a5f624b834ec2` | `1dd4d835b896553a01623c4e8d8fbb089b1f7e06` |
+| `ultra-akte-0.3.0.tar.gz` (Source code, tar.gz) | `aa9d282a5725155274de73f73f21576941ef7f2d1693323b12c67817625012aa` | `1dd4d835b896553a01623c4e8d8fbb089b1f7e06` |
+
+Prüfen unter Windows: `Get-FileHash "$env:TEMP\ultra-akte-0.3.0.zip"`; macOS und Linux: `shasum -a 256 DATEI`.
