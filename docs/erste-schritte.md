@@ -204,7 +204,7 @@ dann unterschreiben.
 
 1. **Docker Desktop** von https://www.docker.com/products/docker-desktop/ laden („Download for Windows – AMD64“),
    installieren mit **„All-users installation“**, neu starten, WSL-Fenster: Taste, Docker-Fenster: „Accept“.
-2. **Die Akte laden:** https://github.com/ThePyth0nKid/die-akte/releases/tag/v0.2.0-rc.2 → „Source code (zip)“.
+2. **Die Akte laden:** https://github.com/ThePyth0nKid/die-akte/releases/tag/v0.2.0 → „Source code (zip)“.
 3. **Entpacken:** Rechtsklick auf die ZIP-Datei → „Alle extrahieren“. Klick nicht in der ZIP auf START-AKTE: Windows
    entpackt dann nur diese eine Datei, und der Starter meldet „Bitte zuerst entpacken“.
 

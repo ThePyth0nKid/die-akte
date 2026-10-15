@@ -12,7 +12,7 @@ Anleitung für KI-Agenten (Claude Code, Codex und andere). Zwei Fälle:
 > **An den Agenten:** Dein Mensch hat dich gebeten, die Akte einzurichten. Folge diesen Schritten der Reihe nach.
 > Hast du diese Seite mit einem Werkzeug gelesen, das Seiten zusammenfasst, hol dir zuerst den Wortlaut, denn die
 > Befehle müssen genau so laufen:
-> `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/die-akte/v0.2.0-rc.2/AGENTS.md`
+> `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/die-akte/v0.2.0/AGENTS.md`
 > (macOS und Linux: `curl -fsSL …` mit derselben Adresse).
 
 ### Regeln, die immer gelten
@@ -59,8 +59,9 @@ Danach braucht Windows einen Neustart. Sag deinem Menschen vorher genau das (fü
 aktuellen Arbeitsordner ein):
 
 > Starte jetzt den PC neu. Nach dem Neustart: Will ein schwarzes Fenster „Windows-Subsystem für Linux …“ eine
-> Taste, drück sofort eine Taste. Zeigt Docker einen Vertrag, klickst du „Accept“; anmelden musst du dich bei
-> Docker nicht.
+> Taste, drück sofort eine Taste. Meldet Docker danach „WSL not installed“, klickst du „Quit“: Das ist normal, ich
+> starte Docker später selbst. Zeigt Docker einen Vertrag, klickst du „Accept“; anmelden musst du dich bei Docker
+> nicht.
 > Dann öffnest du PowerShell, tippst `cd ORDNER` und danach `claude --continue`. Dann mache ich weiter.
 
 ### Schritt 2: Die Akte holen
@@ -76,7 +77,7 @@ if (Test-Path "$env:USERPROFILE\Akte\compose.yaml") { "Akte ist da" } elseif ((T
   `Akte` stört nicht):
 
 ```
-$ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -UseBasicParsing "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.zip" -OutFile "$env:TEMP\die-akte-0.2.0.zip"
+$ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -UseBasicParsing "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip" -OutFile "$env:TEMP\die-akte-0.2.0.zip"
 ```
 
 ```
@@ -88,6 +89,12 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\Akte" | Out-Null; Copy-Ite
 ```
 
 ### Schritt 3: Die Akte starten
+
+Liest du vorher eine Datei im Ordner `Akte` (nur `start\akte.ps1`, nie `.env`), fragt Claude Code deinen Menschen
+vielleicht auf Englisch: „Read outside the working directories … Allow this read?“ Sag ihm vorher: „Gleich fragt
+Claude Code auf Englisch, ob ich im Ordner Akte lesen darf. Wähl mit den Pfeiltasten die Antwort, die es nur dieses
+eine Mal erlaubt (Yes, but ask again next time), und drück Enter. Nimm nicht die Antwort mit keep allowing, die
+erlaubt es dauerhaft.“ Mit „No“ liest du die Datei nicht; der Start geht trotzdem.
 
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Akte\start\akte.ps1" start -Still
@@ -142,7 +149,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Akte\start
 Der Starter installiert bei Bedarf uv in einer festen Version (offizieller Installer von astral.sh, Prüfsumme
 geprüft), trägt `%USERPROFILE%\.local\bin` dauerhaft in den Pfad ein, holt den Token, ersetzt einen alten Eintrag
 `akte` und trägt die Akte bei Claude Code ein:
-`claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.2.0-rc.2.zip#subdirectory=mcp" akte-mcp`.
+`claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.2.0.zip#subdirectory=mcp" akte-mcp`.
 Danach lädt er den Akte-Baustein einmal vor. Gibt es mehrere Konten, meldet er Rückgabewert 9; frag deinen
 Menschen, welches Konto du benutzen sollst, und häng `-Konto NAME` an.
 
@@ -216,7 +223,7 @@ Gleiche Schritte, andere Befehle:
    deinen Menschen):
 
    ```
-   mkdir -p "$HOME/Akte" && curl -fsSL https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.tar.gz | tar -xz -C "$HOME/Akte" --strip-components=1
+   mkdir -p "$HOME/Akte" && curl -fsSL https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.tar.gz | tar -xz -C "$HOME/Akte" --strip-components=1
    ```
 
 3. Starten: `bash ~/Akte/start/akte.sh start --still` (öffnet den Browser mit eingetragenem Code)
@@ -270,7 +277,7 @@ Fallen bei den Startern (`start/`):
 * Ein Einrichtungscode entsteht nur für eine Akte ohne Daten-Volume; nach der Einrichtung löscht der Starter ihn aus
   `.env`. Windows: `.env` nur für das eigene Konto (Zugriffsliste ganz ersetzt), macOS/Linux: `chmod 600`.
 * Die Version steht in jedem Starter genau einmal (`$AkteVersion` in `akte.ps1`, `AKTE_VERSION` in `akte.sh`); die
-  Prüfskripte lesen sie dort. In der Doku steht der Tag nur in Adressen als `/v0.2.0-rc.2`.
+  Prüfskripte lesen sie dort. In der Doku steht der Tag nur in Adressen als `/v0.2.0`.
 * Programme mit vollem Pfad aufrufen (`%SystemRoot%\System32\…`), wo es geht: Auf manchen Rechnern ist der
   System-Pfad kaputt.
 * Neue Starter-Dateien ausführbar einchecken: `git add --chmod=+x start/akte.sh start/stop-akte.command`.

@@ -50,7 +50,7 @@ Benutzerkontensteuerung nach; dein Mensch klickt „Ja“. Danach ist ein Neusta
 |---|---|---|
 | „Installation failed. One prerequisite is not fulfilled.“ mit Verweis auf „Virtual Machine Platform“ | Im Installer war „Per-user installation (Recommended)“ gewählt. Diese Variante kann die nötige Windows-Funktion nicht einschalten. | Installer noch einmal starten (oder `winget install …` wiederholen) und **„All-users installation“** wählen. |
 | Nach dem Neustart ein schwarzes Fenster: „Windows-Subsystem für Linux muss auf die neueste Version aktualisiert werden … Drücken Sie eine beliebige Taste … Timeout in 60 Sekunden“, halb verdeckt vom Docker-Vertrag | Docker stößt das Update von WSL an (WSL ist die Linux-Umgebung, in der Docker läuft). | Vorher ansagen: sofort eine Taste drücken, dann „Ja“ in der Windows-Frage. Ist die Frist verpasst: Docker Desktop schließen, PC neu starten. |
-| „Docker Desktop – WSL not installed … run wsl --install in an administrative PowerShell, then restart“, obwohl WSL daneben „erfolgreich“ meldet | Docker startet schneller, als WSL fertig installiert ist. | Den Hinweis nicht befolgen. „Quit“ klicken, eine Minute warten, Docker Desktop neu öffnen. |
+| „Docker Desktop – WSL not installed … run wsl --install in an administrative PowerShell, then restart“, obwohl WSL daneben „erfolgreich“ meldet | Docker startet schneller, als WSL fertig installiert ist. | Den Hinweis nicht befolgen. „Quit“ klicken. Der Starter öffnet Docker in Schritt 3 selbst; ohne Starter eine Minute warten und Docker Desktop neu öffnen. Die Ansage aus Schritt 1 nennt das Fenster, damit es nicht wie ein Fehler aussieht. |
 | Fenster „Willkommen bei WSL“ | Begrüßung von Windows | schließen |
 | „Starting the Docker Engine…“ für ein bis drei Minuten | normaler erster Start | warten; der Starter wartet bis zu 3 Minuten mit Fortschritt |
 
@@ -103,6 +103,7 @@ bei einem Fehler die letzten 25 Zeilen. Alle 30 Sekunden kommt ein Lebenszeichen
 | Rückgabe 6, `container die-akte-api-1 is unhealthy` | Backend startet nicht | `docker compose logs api` im Akte-Ordner lesen und deinem Menschen die Fehlerzeile zeigen |
 | `error getting credentials … docker-credential-desktop … not found in %PATH%` | Terminal stammt von vor der Docker-Installation | neues Terminal; der Starter ergänzt den Pfad inzwischen selbst |
 | „Kein Browser ist aufgegangen“ statt „Der Browser ist offen“ | Kein Standardbrowser, oder `-OhneBrowser` | Mensch nimmt den Notweg ohne Code (Abschnitt 4 unten); den Code zeigt keine Konsole |
+| Claude Code fragt englisch „Read outside the working directories … Allow this read?“, bevor du `start\akte.ps1` liest | Du arbeitest im Ordner deines Menschen (etwa `Recherche`), die Akte liegt in `%USERPROFILE%\Akte` (seit Claude Code 2.1.300, Durchlauf 4) | Vorher ansagen; dein Mensch wählt die einmalige Erlaubnis („Yes, but ask again next time“), nicht die vorausgewählte Dauer-Erlaubnis („keep allowing“). Lies dort nur `start\akte.ps1`, nie `.env`. Mit „No“ liest du die Datei nicht, der Start geht trotzdem |
 
 ### 4. Das erste Konto
 
@@ -149,7 +150,7 @@ Was passiert, in dieser Reihenfolge:
 4. uv wird installiert, falls es fehlt: feste Version 0.12.21 des offiziellen Installers von astral.sh. Der
    Starter lädt die Datei, vergleicht ihre SHA-256-Prüfsumme mit der im Starter hinterlegten und führt sie nur bei
    Gleichheit aus (sonst 8, mit Grund).
-5. Vorwärmen: `uvx --python 3.12 --from "…/v0.2.0-rc.2.zip#subdirectory=mcp" akte --help` lädt Python 3.12 und die Pakete
+5. Vorwärmen: `uvx --python 3.12 --from "…/v0.2.0.zip#subdirectory=mcp" akte --help` lädt Python 3.12 und die Pakete
    einmal (sonst 11). So läuft Claude Code beim ersten Start nicht in seine Zeitgrenze.
 6. Der Token kommt aus `docker compose exec -T api python manage.py akte_token KONTO`, ohne Anzeige (sonst 12).
 7. Alte Einträge `akte` werden entfernt (`claude mcp remove akte -s local` und `-s user`), dann:
@@ -167,7 +168,7 @@ Datei nicht weitergibt.
 | `uvx` oder `git` „wurde nicht als Name eines Cmdlet … erkannt“ | uv fehlt; Git braucht die Akte nicht mehr. | Der Starter installiert uv. |
 | `Git executable not found` oder ein frisch installiertes Programm fehlt | Ein Terminal-Fenster kennt nur die Pfade von seinem Start. | Neues Terminal-Fenster öffnen. |
 | In `/mcp` steht `akte` nicht | Claude Code läuft noch mit den alten Einstellungen. | Neustart: `/exit`, `claude --continue`. |
-| Gleich nach dem ersten Neustart: `/mcp` zeigt `akte ✗ failed`, nach „Reconnect“ ist es verbunden | Der erste Start des Bausteins dauerte länger, als Claude wartet (Starter vor v0.2.0-rc.2 luden ihn nur halb vor). | Dein Mensch: `/mcp`, `akte` wählen, „Reconnect“. |
+| Gleich nach dem ersten Neustart: `/mcp` zeigt `akte ✗ failed`, nach „Reconnect“ ist es verbunden | Der erste Start des Bausteins dauerte länger, als Claude wartet (Starter vor Version 0.2.0 luden ihn nur halb vor). | Dein Mensch: `/mcp`, `akte` wählen, „Reconnect“. |
 | Gesicherte Quelle aus dem Lobbyregister zeigt nur „Hinweise zum Urheberrecht“; `zitat_pruefen`: nicht gefunden | Stellungnahmen öffnen sich erst nach einem Klick auf einen Hinweis; die Akte sichert die Hinweisseite. | Dein Mensch öffnet die PDF im Browser und legt sie am Faden auf „PDF oder Screenshot hierher ziehen“; danach `zitat_pruefen`. |
 | `import_paket` meldet „höchstens … Zeichen“ oder unter `hinweise` „Unbekannte Felder“ | Ein Feld ist länger, als die Akte speichert (z. B. `fundstelle` 120 Zeichen), oder heißt anders (Karten: `kurzbeschreibung`). | Kürzen bzw. umbenennen und den Probelauf wiederholen. Bricht ein echter Import trotzdem ab, bleibt Angelegtes stehen; derselbe Aufruf noch einmal macht weiter. |
 

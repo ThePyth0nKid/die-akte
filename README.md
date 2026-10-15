@@ -61,7 +61,7 @@ Mac und Linux: [docs/erste-schritte.md](docs/erste-schritte.md#mac-und-linux). O
 > **An den Agenten:** Dein Mensch hat dich gebeten, die Akte einzurichten. Folge diesen Schritten der Reihe nach.
 > Hast du diese Seite mit einem Werkzeug gelesen, das Seiten zusammenfasst, hol dir zuerst den Wortlaut, denn die
 > Befehle müssen genau so laufen:
-> `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/die-akte/v0.2.0-rc.2/AGENTS.md`
+> `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/die-akte/v0.2.0/AGENTS.md`
 > (macOS und Linux: `curl -fsSL …` mit derselben Adresse).
 
 ### Regeln, die immer gelten
@@ -108,8 +108,9 @@ Danach braucht Windows einen Neustart. Sag deinem Menschen vorher genau das (fü
 aktuellen Arbeitsordner ein):
 
 > Starte jetzt den PC neu. Nach dem Neustart: Will ein schwarzes Fenster „Windows-Subsystem für Linux …“ eine
-> Taste, drück sofort eine Taste. Zeigt Docker einen Vertrag, klickst du „Accept“; anmelden musst du dich bei
-> Docker nicht.
+> Taste, drück sofort eine Taste. Meldet Docker danach „WSL not installed“, klickst du „Quit“: Das ist normal, ich
+> starte Docker später selbst. Zeigt Docker einen Vertrag, klickst du „Accept“; anmelden musst du dich bei Docker
+> nicht.
 > Dann öffnest du PowerShell, tippst `cd ORDNER` und danach `claude --continue`. Dann mache ich weiter.
 
 ### Schritt 2: Die Akte holen
@@ -125,7 +126,7 @@ if (Test-Path "$env:USERPROFILE\Akte\compose.yaml") { "Akte ist da" } elseif ((T
   `Akte` stört nicht):
 
 ```
-$ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -UseBasicParsing "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.zip" -OutFile "$env:TEMP\die-akte-0.2.0.zip"
+$ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -UseBasicParsing "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip" -OutFile "$env:TEMP\die-akte-0.2.0.zip"
 ```
 
 ```
@@ -137,6 +138,12 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\Akte" | Out-Null; Copy-Ite
 ```
 
 ### Schritt 3: Die Akte starten
+
+Liest du vorher eine Datei im Ordner `Akte` (nur `start\akte.ps1`, nie `.env`), fragt Claude Code deinen Menschen
+vielleicht auf Englisch: „Read outside the working directories … Allow this read?“ Sag ihm vorher: „Gleich fragt
+Claude Code auf Englisch, ob ich im Ordner Akte lesen darf. Wähl mit den Pfeiltasten die Antwort, die es nur dieses
+eine Mal erlaubt (Yes, but ask again next time), und drück Enter. Nimm nicht die Antwort mit keep allowing, die
+erlaubt es dauerhaft.“ Mit „No“ liest du die Datei nicht; der Start geht trotzdem.
 
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Akte\start\akte.ps1" start -Still
@@ -191,7 +198,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Akte\start
 Der Starter installiert bei Bedarf uv in einer festen Version (offizieller Installer von astral.sh, Prüfsumme
 geprüft), trägt `%USERPROFILE%\.local\bin` dauerhaft in den Pfad ein, holt den Token, ersetzt einen alten Eintrag
 `akte` und trägt die Akte bei Claude Code ein:
-`claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.2.0-rc.2.zip#subdirectory=mcp" akte-mcp`.
+`claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.2.0.zip#subdirectory=mcp" akte-mcp`.
 Danach lädt er den Akte-Baustein einmal vor. Gibt es mehrere Konten, meldet er Rückgabewert 9; frag deinen
 Menschen, welches Konto du benutzen sollst, und häng `-Konto NAME` an.
 
@@ -265,7 +272,7 @@ Gleiche Schritte, andere Befehle:
    deinen Menschen):
 
    ```
-   mkdir -p "$HOME/Akte" && curl -fsSL https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.tar.gz | tar -xz -C "$HOME/Akte" --strip-components=1
+   mkdir -p "$HOME/Akte" && curl -fsSL https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.tar.gz | tar -xz -C "$HOME/Akte" --strip-components=1
    ```
 
 3. Starten: `bash ~/Akte/start/akte.sh start --still` (öffnet den Browser mit eingetragenem Code)
@@ -286,7 +293,7 @@ Für alle, die ohne Agent einrichten wollen. Mit Bildern: [docs/erste-schritte.m
    AMD64“ (fast jeder PC; „ARM64“ nur bei Geräten mit Snapdragon-Chip). Im Installer **„All-users installation“**
    wählen und bei der Windows-Frage „Ja“ klicken. Die vorgewählte „Per-user installation“ scheitert auf frischem
    Windows. Danach den PC neu starten, im WSL-Fenster eine Taste drücken, im Docker-Fenster „Accept“ klicken.
-2. **Die Akte laden:** https://github.com/ThePyth0nKid/die-akte/releases/tag/v0.2.0-rc.2 → „Source code (zip)“. Die
+2. **Die Akte laden:** https://github.com/ThePyth0nKid/die-akte/releases/tag/v0.2.0 → „Source code (zip)“. Die
    ZIP-Datei mit Rechtsklick → „Alle extrahieren“ entpacken. Aus der ZIP heraus startet die Akte nicht.
 3. **Starten:** im entpackten Ordner `start` die Datei `START-AKTE` doppelklicken. Windows warnt „Der Herausgeber
    konnte nicht verifiziert werden“: „Ausführen“. Der Starter wartet auf Docker, baut die Akte (beim ersten Mal 3
@@ -378,7 +385,7 @@ docker compose exec api python manage.py akte_token DEIN-KONTO
 ```
 
 ```
-claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.zip#subdirectory=mcp" akte-mcp
+claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=mcp" akte-mcp
 ```
 
 Ohne Token sieht Claude bei einer lokalen Akte nichts. Alles, was ein Agent anlegt, ist ein Entwurf. Werkzeuge und
@@ -387,7 +394,7 @@ Arbeitsweise: [docs/mcp.md](docs/mcp.md).
 ## Beweiskette prüfen – ohne dem Server zu vertrauen
 
 ```
-uv tool install --python 3.12 "akte-mcp[beweis] @ https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0-rc.2.zip#subdirectory=mcp"
+uv tool install --python 3.12 "akte-mcp[beweis] @ https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=mcp"
 ```
 
 ```

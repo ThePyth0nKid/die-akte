@@ -29,7 +29,7 @@
 # statt des Standard-Browsers) wirkt nur zusammen mit AKTE_STARTER_TEST=1.
 set -euo pipefail
 
-AKTE_VERSION="0.2.0-rc.2"
+AKTE_VERSION="0.2.0"
 HIER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WURZEL="$(cd "$HIER/.." && pwd)"
 START_ORDNER="$(pwd)"
