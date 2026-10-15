@@ -83,8 +83,8 @@ jobs:
         env:
           AKTE_BACKEND_PYTHON: python
         run: pytest -q
-      - name: Leckschutz-Prüfer (eigene Tests)
-        run: pytest -q werkzeuge/scrub
+      - name: Leckschutz-Prüfer und README-Werkzeug (eigene Tests)
+        run: pytest -q werkzeuge/scrub werkzeuge/readme_bilder
 
   # Die Starter laufen mit Attrappen für docker, claude und uvx (kein Docker, kein Internet nötig). Geprüft werden die
   # Pfade, an denen Anfänger in 0.1.0 hängen blieben: Start aus der ZIP, Docker fehlt oder startet nicht, Port belegt,
