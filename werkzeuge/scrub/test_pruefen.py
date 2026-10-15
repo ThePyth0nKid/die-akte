@@ -217,3 +217,123 @@ def test_verlinkter_ordner_ist_nicht_geprueft(tmp_path):
         pytest.skip("Symlinks brauchen hier Rechte")
     funde = scrub.dateien_pruefen(scrub.ordner_dateien(tmp_path / "staging"), tmp_path / "staging", _oeffentlich())
     assert [f.regel is scrub.UNGEPRUEFT for f in funde] == [True]
+
+
+
+def _rev(cwd, *args):
+    import subprocess
+
+    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def _repo_mit_autor(tmp_path, nachricht_zwei="zwei mit geheimwort"):
+    """Zwei Commits mit Autor „Erika Geheimwort“; Committer bleibt „Test“, wie bei GitHub-Merges."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    for k, v in (("user.name", "Test"), ("user.email", "test@example.org"), ("commit.gpgsign", "false")):
+        _git(repo, "config", k, v)
+    autor = "--author=Erika Geheimwort <test@example.org>"
+    (repo / "a.txt").write_text("sauber\n", encoding="utf-8")
+    _git(repo, "add", "a.txt")
+    _git(repo, "commit", "-q", autor, "-m", "eins")
+    erster = _rev(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", autor, "-m", nachricht_zwei)
+    zweiter = _rev(repo, "rev-parse", "HEAD")
+    return repo, erster, zweiter
+
+
+def _ausnahmen(tmp_path, monkeypatch, *commits):
+    datei = tmp_path / "ausnahmen.txt"
+    datei.write_text("# Kommentar\n" + "".join(f"{c} autor-name  # Grund\n" for c in commits), encoding="utf-8")
+    monkeypatch.setattr(scrub, "AUSNAHMEN", datei)
+
+
+def test_ausnahme_nimmt_nur_den_autorennamen_aus(tmp_path, monkeypatch, capsys):
+    repo, erster, zweiter = _repo_mit_autor(tmp_path)
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    monkeypatch.chdir(repo)
+    regeln = scrub._regeln_lesen("geheimwort", True, "privat")
+
+    monkeypatch.setattr(scrub, "AUSNAHMEN", tmp_path / "gibt-es-nicht.txt")
+    assert sorted((f.ort, f.zeile) for f in scrub.historie_pruefen(regeln)) == sorted(
+        [(f"{erster[:12]}:kopf", 1), (f"{zweiter[:12]}:kopf", 1), (f"{zweiter[:12]}:kopf", 5)])
+
+    _ausnahmen(tmp_path, monkeypatch, erster, zweiter)
+    funde = scrub.historie_pruefen(regeln)
+    # Der Name ist ausgenommen, die Nachricht des zweiten Commits bleibt ein Fund (Zeile 5 = %B).
+    assert [(f.ort, f.zeile) for f in funde] == [(f"{zweiter[:12]}:kopf", 5)]
+    assert f"Autorenname von {erster[:12]} nicht geprüft" in capsys.readouterr().err
+
+
+def test_ausnahme_fuer_einen_commit_gibt_keinen_anderen_frei(tmp_path, monkeypatch):
+    repo, erster, zweiter = _repo_mit_autor(tmp_path, nachricht_zwei="zwei")
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    monkeypatch.chdir(repo)
+    _ausnahmen(tmp_path, monkeypatch, erster)
+    funde = scrub.historie_pruefen(scrub._regeln_lesen("geheimwort", True, "privat"))
+    assert [(f.ort, f.zeile) for f in funde] == [(f"{zweiter[:12]}:kopf", 1)]
+
+
+def test_ausnahme_gilt_nur_fuer_commits_auf_main(tmp_path, monkeypatch, capsys):
+    repo, erster, zweiter = _repo_mit_autor(tmp_path, nachricht_zwei="zwei")
+    monkeypatch.chdir(repo)
+    regeln = scrub._regeln_lesen("geheimwort", True, "privat")
+    _ausnahmen(tmp_path, monkeypatch, erster, zweiter)
+
+    # Ohne origin/main gilt keine Ausnahme: beide Namen bleiben Funde.
+    assert sorted(f.ort for f in scrub.historie_pruefen(regeln)) == sorted(
+        [f"{erster[:12]}:kopf", f"{zweiter[:12]}:kopf"])
+    assert "gilt nicht" in capsys.readouterr().err
+
+    # origin/main auf dem ersten Commit: Der zweite (etwa ein Commit aus einem Pull Request) bleibt ein Fund.
+    _git(repo, "update-ref", "refs/remotes/origin/main", erster)
+    assert [f.ort for f in scrub.historie_pruefen(regeln)] == [f"{zweiter[:12]}:kopf"]
+
+
+def test_ausnahme_deckt_nie_mail_oder_committer(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    for k, v in (("user.name", "Test"), ("user.email", "geheimwort@example.org"), ("commit.gpgsign", "false")):
+        _git(repo, "config", k, v)
+    (repo / "a.txt").write_text("sauber\n", encoding="utf-8")
+    _git(repo, "add", "a.txt")
+    _git(repo, "commit", "-q", "-m", "eins")
+    commit = _rev(repo, "rev-parse", "HEAD")
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    _ausnahmen(tmp_path, monkeypatch, commit)
+    monkeypatch.chdir(repo)
+    funde = scrub.historie_pruefen(scrub._regeln_lesen("geheimwort", True, "privat"))
+    assert [f.zeile for f in funde] == [2, 4]  # Autor-Mail und Committer-Mail
+
+
+def test_unbenutzte_ausnahme_wird_gemeldet(tmp_path, monkeypatch, capsys):
+    repo, _, _ = _repo_mit_autor(tmp_path, nachricht_zwei="zwei")
+    monkeypatch.chdir(repo)
+    _ausnahmen(tmp_path, monkeypatch, "f" * 40)
+    scrub.historie_pruefen(scrub._regeln_lesen("nichts-davon", True, "privat"))
+    assert f"Ausnahme für {'f' * 12} trifft keinen Commit" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("zeile", ["eae8f07 autor-name", "e" * 40 + " autor-mail", "e" * 40, "E" * 40 + " autor-name",
+                                   "e" * 40 + " autor-name autor-name", "e" * 64 + " autor-name"])
+def test_kaputte_ausnahme_bricht_ab(tmp_path, zeile):
+    datei = tmp_path / "ausnahmen.txt"
+    datei.write_text(zeile + "\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        scrub._ausnahmen_lesen(datei)
+
+
+def test_ausnahmen_im_repo_liegen_auf_main():
+    ausnahmen = scrub._ausnahmen_lesen(scrub.AUSNAHMEN)  # bricht bei kaputten Zeilen ab
+    wurzel = scrub.repo_wurzel()
+    if _rev(wurzel, "rev-parse", "--is-shallow-repository") == "true":
+        pytest.skip("flacher Klon")
+    for commit in ausnahmen:
+        _rev(wurzel, "cat-file", "-e", f"{commit}^{{commit}}")  # Commit existiert
+        try:
+            _rev(wurzel, "rev-parse", "--verify", "-q", scrub.AUSNAHME_BASIS)
+        except Exception:
+            pytest.skip(f"{scrub.AUSNAHME_BASIS} fehlt")
+        _rev(wurzel, "merge-base", "--is-ancestor", commit, scrub.AUSNAHME_BASIS)

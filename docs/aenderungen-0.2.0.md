@@ -108,7 +108,7 @@ Beim Veröffentlichen eintragen:
 
 | Datei | SHA-256 | Commit |
 |---|---|---|
-| `die-akte-0.2.0.zip` (Source code, zip) | NOCH-EINTRAGEN | NOCH-EINTRAGEN |
-| `die-akte-0.2.0.tar.gz` (Source code, tar.gz) | NOCH-EINTRAGEN | NOCH-EINTRAGEN |
+| `die-akte-0.2.0.zip` (Source code, zip) | `2bd06ae3981b8745e58caa7051f62327b1bf0c422f4d3debfad239fd67575848` | `eae8f076493a369d5dcba9d13ba28c889ed622ee` |
+| `die-akte-0.2.0.tar.gz` (Source code, tar.gz) | `ba74cc0e3c9646c8a757ff2cbaf9a0464dcd653285e96366a839558b0e340150` | `eae8f076493a369d5dcba9d13ba28c889ed622ee` |
 
 Prüfen unter Windows: `Get-FileHash "$env:TEMP\die-akte-0.2.0.zip"`; macOS und Linux: `shasum -a 256 DATEI`.

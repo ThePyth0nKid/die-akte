@@ -24,6 +24,11 @@ werden umkodiert, Text zusätzlich in Unicode-NFC geprüft (ein „ü“ aus u +
 fertiges „ü“). ZIP-Container (auch DOCX, XLSX, PPTX) werden Datei für Datei geprüft. ``--historie`` prüft auch Tags
 und verweigert flache Klone, denn dort fehlt Historie.
 
+Einzige Ausnahme in der Historie: ``historie_ausnahmen.txt`` neben diesem Skript nennt schon veröffentlichte Commits,
+deren Autorenname nicht geprüft wird (etwa ein Merge-Commit, in den GitHub den Profilnamen geschrieben hat). Sie gilt
+nur für Commits, die schon auf ``origin/main`` liegen; ein Pull Request kann so keinen eigenen Commit freigeben. Mail,
+Committer, Nachricht und Inhalt dieser Commits prüft ``--historie`` weiter; jede Ausnahme steht im Log.
+
 Nicht geprüft werden komprimierte PDF-Inhalte, Base64 und Git-LFS-Objekte (nur deren Zeiger). Für solche Dateien
 gilt: vor dem Commit selbst ansehen.
 
@@ -49,6 +54,11 @@ from pathlib import Path
 
 HIER = Path(__file__).resolve().parent
 OEFFENTLICH = HIER / "regeln_oeffentlich.txt"
+AUSNAHMEN = HIER / "historie_ausnahmen.txt"
+#: Was eine Ausnahme abdecken darf: nur den Autorennamen im Commit-Kopf, nie Mail, Committer oder Nachricht.
+AUSNAHME_FELDER = {"autor-name"}
+#: Eine Ausnahme gilt nur für Commits, die hier schon enthalten sind (fehlt der Verweis: keine Ausnahme).
+AUSNAHME_BASIS = "refs/remotes/origin/main"
 ERLAUBT_MARKE = "scrub:erlaubt"
 MAX_MB = 50
 
@@ -295,11 +305,35 @@ def _blobs_lesen(objekte: list[str], wurzel: Path, max_mb: int):
         prozess.wait()
 
 
+def _ausnahmen_lesen(pfad: Path) -> dict[str, set[str]]:
+    """``<voller Commit-Hash> autor-name`` je Zeile, ``#`` = Kommentar. Jede andere Zeile bricht ab (im Zweifel prüfen)."""
+    if not pfad.exists():
+        return {}
+    ausnahmen: dict[str, set[str]] = {}
+    for nr, roh in enumerate(pfad.read_text(encoding="utf-8").splitlines(), start=1):
+        teile = roh.split("#", 1)[0].split()
+        if not teile:
+            continue
+        if len(teile) != 2 or not re.fullmatch(r"[0-9a-f]{40}", teile[0]) or teile[1] not in AUSNAHME_FELDER:
+            raise SystemExit(f"{pfad.name}:{nr}: erwartet „<voller Commit-Hash> autor-name“.")
+        ausnahmen.setdefault(teile[0], set()).add(teile[1])
+    return ausnahmen
+
+
+def _liegt_auf_basis(commit: str, wurzel: Path) -> bool:
+    """Ist ``commit`` schon in ``AUSNAHME_BASIS`` enthalten? Fehlt der Verweis, nein (dann gilt keine Ausnahme)."""
+    ergebnis = subprocess.run(["git", "merge-base", "--is-ancestor", commit, AUSNAHME_BASIS], cwd=wurzel,
+                              capture_output=True)
+    return ergebnis.returncode == 0
+
+
 def historie_pruefen(regeln: list[Regel], max_mb: int = MAX_MB) -> list[Fund]:
     wurzel = repo_wurzel()
     if _git("rev-parse", "--is-shallow-repository", cwd=wurzel).strip() == b"true":
         raise SystemExit("Flacher Klon: Die Historie ist unvollständig. Erst `git fetch --unshallow` "
                          "(in GitHub Actions: fetch-depth: 0).")
+    ausnahmen = _ausnahmen_lesen(AUSNAHMEN)
+    genutzt: set[str] = set()
     funde: list[Fund] = []
     # Tags: Name, Verfasser und Nachricht annotierter Tags
     tags = _git("for-each-ref", "--format=%(refname)%0a%(taggername) %(taggeremail)%0a%(contents)", "refs/tags",
@@ -310,6 +344,17 @@ def historie_pruefen(regeln: list[Regel], max_mb: int = MAX_MB) -> list[Fund]:
     namen_gesehen: set[str] = set()
     for commit in _git("rev-list", "--all", cwd=wurzel).decode().split():
         kopf = _git("show", "-s", "--format=%an%n%ae%n%cn%n%ce%n%B", commit, cwd=wurzel)
+        if "autor-name" in ausnahmen.get(commit, ()):
+            genutzt.add(commit)
+            ende = kopf.find(b"\n")
+            if ende < 0:
+                raise SystemExit(f"Unerwartetes Kopfformat in {commit[:12]}.")
+            if _liegt_auf_basis(commit, wurzel):
+                # Zeile 1 (%an) ersetzen, die Zeilennummern der übrigen Felder bleiben gleich.
+                kopf = b"(Autorenname ausgenommen)" + kopf[ende:]
+                print(f"Ausnahme: Autorenname von {commit[:12]} nicht geprüft ({AUSNAHMEN.name}).", file=sys.stderr)
+            else:
+                print(f"Ausnahme für {commit[:12]} gilt nicht: nicht in {AUSNAHME_BASIS}.", file=sys.stderr)
         funde += _pruefe_bytes(f"{commit[:12]}:kopf", kopf, regeln)
         for eintrag in filter(None, _git("ls-tree", "-r", "-z", commit, cwd=wurzel).split(b"\0")):
             meta, _, name_b = eintrag.partition(b"\t")
@@ -327,6 +372,8 @@ def historie_pruefen(regeln: list[Regel], max_mb: int = MAX_MB) -> list[Fund]:
             funde.append(_ungeprueft(ort, f"größer als {max_mb} MB oder unlesbar"))
         else:
             funde += _pruefe_bytes(ort, daten, regeln)
+    for commit in sorted(set(ausnahmen) - genutzt):
+        print(f"Hinweis: Ausnahme für {commit[:12]} trifft keinen Commit ({AUSNAHMEN.name}).", file=sys.stderr)
     return funde
 
 
