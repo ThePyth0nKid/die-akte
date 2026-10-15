@@ -1,4 +1,4 @@
-# Erste Schritte mit der Akte
+# Erste Schritte mit der Ultra-Akte
 
 Diese Anleitung bringt dich von einem frischen Windows-PC bis zu deiner ersten eigenen Wand. Rechne mit 20 bis
 40 Minuten; das meiste davon ist Warten auf Downloads. Alle Bilder stammen von einem Test-PC mit frischem
@@ -72,7 +72,7 @@ Benutzerordner, hast du Claude im falschen Ordner gestartet: „No, exit“ und 
 
 Tipp in Claude:
 
-> Richte mir die Akte ein. Die Anleitung steht hier: https://github.com/ThePyth0nKid/die-akte
+> Richte mir die Ultra-Akte ein. Die Anleitung steht hier: https://github.com/ThePyth0nKid/ultra-akte
 
 ![Der Auftrag „Richte mir die Akte ein“ in Claude Code](bilder/claude-auftrag-einrichten.png)
 
@@ -204,7 +204,7 @@ dann unterschreiben.
 
 1. **Docker Desktop** von https://www.docker.com/products/docker-desktop/ laden („Download for Windows – AMD64“),
    installieren mit **„All-users installation“**, neu starten, WSL-Fenster: Taste, Docker-Fenster: „Accept“.
-2. **Die Akte laden:** https://github.com/ThePyth0nKid/die-akte/releases/tag/v0.2.0 → „Source code (zip)“.
+2. **Die Akte laden:** https://github.com/ThePyth0nKid/ultra-akte/releases/tag/v0.3.0 → „Source code (zip)“.
 3. **Entpacken:** Rechtsklick auf die ZIP-Datei → „Alle extrahieren“. Klick nicht in der ZIP auf START-AKTE: Windows
    entpackt dann nur diese eine Datei, und der Starter meldet „Bitte zuerst entpacken“.
 
@@ -240,7 +240,7 @@ dann unterschreiben.
 | Starter meldet „Port 8080 ist belegt“ | Er nimmt selbst einen anderen; die neue Adresse steht im Fenster. War Claude schon verbunden: `AGENT-VERBINDEN` noch einmal |
 | Passwort vergessen | Im Akte-Ordner Rechtsklick auf eine freie Stelle → „In Terminal öffnen“, dann `docker compose exec api python manage.py changepassword DEIN-NAME` |
 | In `/mcp` steht `akte` mit ✗ | `start\AGENT-VERBINDEN` noch einmal, dann Claude neu starten |
-| Claude sagt „Die Akte ist nicht erreichbar“ | Docker Desktop öffnen, `start\START-AKTE` doppelklicken |
+| Claude sagt „Die Ultra-Akte ist nicht erreichbar“ | Docker Desktop öffnen, `start\START-AKTE` doppelklicken |
 | Oben in Claude steht mal Opus, mal Sonnet | Das Modell wählst du mit `/model` |
 
 ## Was es kostet
@@ -279,7 +279,7 @@ Datenbank, Kopien, Passwort und dein Unterschrift-Schlüssel bleiben bei dir. Di
 
 4. Dann wie unter Windows: Sag zu Claude:
 
-   > Richte mir die Akte ein. Die Anleitung steht hier: https://github.com/ThePyth0nKid/die-akte
+   > Richte mir die Ultra-Akte ein. Die Anleitung steht hier: https://github.com/ThePyth0nKid/ultra-akte
 
 Von Hand: Die Akte nach `~/Akte` laden und `start/start-akte.command` doppelklicken. Beim ersten Mal blockiert
 macOS die Datei. Dann: Rechtsklick → „Öffnen“, bei neuem macOS Systemeinstellungen → „Datenschutz & Sicherheit“ →

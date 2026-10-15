@@ -1,4 +1,4 @@
-# Die Akte lokal: docker compose up -d --build --wait  →  http://localhost:8080
+# Ultra-Akte lokal: docker compose up -d --build --wait  →  http://localhost:8080
 # Einfacher: start\START-AKTE.cmd (Windows) bzw. bash start/akte.sh (macOS, Linux).
 # Läuft nur auf deinem Rechner (Port an 127.0.0.1 gebunden). Daten im Volume "akte-daten".
 name: die-akte
@@ -34,7 +34,7 @@ services:
       DJANGO_API_URL: http://api:8000
       # Nur über HTTPS auf "true" stellen (eigener Server); lokal über http bleibt es aus.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      AKTE_TITEL: ${AKTE_TITEL:-Die Akte}
+      AKTE_TITEL: ${AKTE_TITEL:-Ultra-Akte}
     depends_on:
       - api
     # Gesund, sobald Next.js antwortet ("/" leitet auf /akte weiter, braucht dafür die API nicht).

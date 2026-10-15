@@ -212,7 +212,7 @@ def _fehler(text: str, status_code: int, felder: dict | None = None) -> Response
     return Response(daten, status=status_code)
 
 
-SCHON_EINGERICHTET = "Die Akte ist schon eingerichtet. Bitte anmelden."
+SCHON_EINGERICHTET = "Die Ultra-Akte ist schon eingerichtet. Bitte anmelden."
 NAME_VERGEBEN = "Diesen Benutzernamen gibt es schon."
 
 

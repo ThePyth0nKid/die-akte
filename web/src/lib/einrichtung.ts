@@ -99,7 +99,7 @@ export function einrichtungFehler(status: number, daten: unknown): EinrichtungAn
     case 403:
       // Ohne deutschen `fehler` kommt die 403 nicht von der Code-Prüfung, sondern von der Herkunftsprüfung (E10).
       if (!fehler) {
-        return antwort("Die Akte hat die Anfrage abgelehnt, weil sie nicht von dieser Seite kam. Öffne die Seite direkt "
+        return antwort("Die Ultra-Akte hat die Anfrage abgelehnt, weil sie nicht von dieser Seite kam. Öffne die Seite direkt "
           + "(Adresse der Akte, dann /akte/einrichten) und versuche es noch einmal.")
       }
       // Nur der falsche Code markiert das Feld; „kein Einrichtungscode gesetzt“ (Einrichtung aus) liegt nicht am Code.
@@ -109,14 +109,14 @@ export function einrichtungFehler(status: number, daten: unknown): EinrichtungAn
       return antwort("Die Anfrage kam in einem Format an, das die Akte nicht annimmt. Lade die Seite neu und versuche es "
         + "noch einmal.")
     case 409:
-      return antwort(fehler || "Die Akte ist schon eingerichtet. Bitte anmelden.", true)
+      return antwort(fehler || "Die Ultra-Akte ist schon eingerichtet. Bitte anmelden.", true)
     case 404:
       return antwort("Diese Version der Akte kennt die Einrichtung im Browser noch nicht. Bitte die Akte aktualisieren.")
     case 429:
       // Die Drossel von DRF antwortet englisch (`detail`), die eigene Sperre des Backends deutsch (`fehler`).
       return antwort(fehler || "Zu viele Versuche. Bitte warte eine Minute und versuche es dann noch einmal.")
     case 0: case 502: case 503: case 504:
-      return antwort(fehler || "Die Akte ist gerade nicht erreichbar. Läuft sie noch? Sonst neu starten (START-AKTE).")
+      return antwort(fehler || "Die Ultra-Akte ist gerade nicht erreichbar. Läuft sie noch? Sonst neu starten (START-AKTE).")
     default:
       return antwort(fehler || `Das hat nicht geklappt (Fehler ${status}). Bitte versuche es noch einmal.`)
   }

@@ -1,6 +1,6 @@
 # Betrieb
 
-Standard ist **lokal auf einem Rechner** (`compose.yaml`, Port nur an `127.0.0.1`). Dieses Kapitel beschreibt die
+Die Ultra-Akte läuft standardmäßig **lokal auf einem Rechner** (`compose.yaml`, Port nur an `127.0.0.1`). Dieses Kapitel beschreibt die
 Starter, die Einstellungen, Sichern und neue Versionen, und was du brauchst, wenn du mehr willst: Seitenbilder von
 Webseiten, Postgres, Zugriff für ein Team. Befehle stehen zuerst für Windows (PowerShell), dann für macOS und Linux.
 
@@ -207,6 +207,16 @@ Die Daten liegen im Volume, nicht im Ordner. Eine neue Version ersetzt nur den O
 6. Claude neu verbinden: `AGENT-VERBINDEN`, dann Claude neu starten.
 
 Läuft alles, kannst du `Akte-alt` löschen.
+
+### Neue Version 0.3.0 (von 0.2)
+
+Die Schritte oben gelten. Was sich dabei ändert (alle Änderungen: [aenderungen-0.3.0.md](aenderungen-0.3.0.md)):
+
+* **Neuer Name: Ultra-Akte.** Das Repo heißt jetzt `ThePyth0nKid/ultra-akte`; alte Adressen mit `die-akte` leitet
+  GitHub weiter. Befehle, Ordner, Starter und der Eintrag `akte` bei Claude bleiben, deine Daten auch.
+* **Titel im Browser:** Kopierst du deine alte `.env`, steht dort noch `AKTE_TITEL=Die Akte`. Setz die Zeile auf
+  `AKTE_TITEL=Ultra-Akte` oder lösch sie; sonst zeigt der Browser-Tab weiter den alten Namen.
+* **Claude neu verbinden:** `AGENT-VERBINDEN` trägt den Baustein aus der ZIP von v0.3.0 ein.
 
 ### Neue Version 0.2.0 (von 0.1)
 

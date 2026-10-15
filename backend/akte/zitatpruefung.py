@@ -122,7 +122,7 @@ def _kopie_holen(quelle, frist: float) -> _Kopie:
                              "an die Quelle an, dann lässt sich das Zitat prüfen.")
     warten = min(10.0, frist - time.monotonic() - 8.0)
     if warten <= 0 or not _abrufe.acquire(timeout=warten):
-        raise _NichtPruefbar("Die Akte lädt gerade andere Quellen. Bitte in einer Minute noch einmal prüfen.")
+        raise _NichtPruefbar("Die Ultra-Akte lädt gerade andere Quellen. Bitte in einer Minute noch einmal prüfen.")
     try:
         # Die Frist gilt für alles: DNS, Verbindung, jede Weiterleitung, das Lesen (abruf.abrufen).
         abruf = abrufen(quelle.url, frist=min(frist - 6.0, time.monotonic() + ABRUF_SEKUNDEN))
@@ -158,7 +158,7 @@ def _pdf_text(daten: bytes, frist: float) -> _Text:
     bekommt, ist nicht prüfbar (statt die 30 s zu reißen)."""
     warten = frist - time.monotonic() - 5.0
     if warten <= 0 or not PDFIUM_SPERRE.acquire(timeout=warten):
-        raise _NichtPruefbar("Die Akte liest gerade andere PDFs. Bitte in einer Minute noch einmal prüfen.")
+        raise _NichtPruefbar("Die Ultra-Akte liest gerade andere PDFs. Bitte in einer Minute noch einmal prüfen.")
     try:
         return _pdf_text_gesperrt(daten, frist)
     finally:

@@ -122,8 +122,8 @@ describe("einrichtungFehler: klare deutsche Texte aus den Antworten", () => {
     expect(a.meldung).not.toContain("Unsupported")
   })
   it("schon eingerichtet (409) zeigt den Weg zum Login", () => {
-    const a = einrichtungFehler(409, { fehler: "Die Akte ist schon eingerichtet. Bitte anmelden." })
-    expect(a).toMatchObject({ meldung: "Die Akte ist schon eingerichtet. Bitte anmelden.", schonEingerichtet: true })
+    const a = einrichtungFehler(409, { fehler: "Die Ultra-Akte ist schon eingerichtet. Bitte anmelden." })
+    expect(a).toMatchObject({ meldung: "Die Ultra-Akte ist schon eingerichtet. Bitte anmelden.", schonEingerichtet: true })
   })
   it("Passwortprüfer (400) landen am Feld", () => {
     const a = einrichtungFehler(400, {

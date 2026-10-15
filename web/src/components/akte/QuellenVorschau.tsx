@@ -93,7 +93,7 @@ export default function QuellenVorschau({ quelle: start, zitat, anDieWand, zeige
           {!nurLesen && stand.length === 0 && q.url && (
             // Kein Fehler: Die Sicherung läuft im Hintergrund und hat keinen eigenen Zwischenstand.
             <span className="rounded bg-white/5 px-1.5 py-0.5 text-[11px] text-[#8A94A0]"
-              title="Die Akte sichert die Quelle im Hintergrund. Das Ergebnis erscheint von selbst.">
+              title="Die Ultra-Akte sichert die Quelle im Hintergrund. Das Ergebnis erscheint von selbst.">
               noch keine eigene Kopie
             </span>
           )}

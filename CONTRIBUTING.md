@@ -22,6 +22,9 @@ Danke, dass du helfen willst.
 * **Keine echten Personen** in Tests, Beispielen und Demos. Erfundene Namen (Freie Stadt Musterhafen …).
 * **Byte-Gleichheit mit Atlas** bleibt: Änderungen an `beweis/` brauchen grüne Kreuzprüfung.
 * Deutsch in Code-Kommentaren und Oberfläche; Englisch in README.en.md.
+* **Der Name ist „Ultra-Akte“**: in Titeln, im Logo, in der Oberfläche, in den Bannern der Starter und bei der ersten
+  Nennung auf jeder Seite. Danach darf im Text „die Akte“ stehen. Befehle und technische Namen bleiben `akte`
+  (Befehl, Ordner `Akte`, `START-AKTE`, MCP-Eintrag `akte`, Docker-Projekt `die-akte`), weil Daten daran hängen.
 
 ## Lizenz der Beiträge
 

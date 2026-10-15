@@ -76,7 +76,7 @@ def lese_boards(user) -> set[str]:
 
 
 class IstRedaktion(BasePermission):
-    message = "Die Akte ist bisher nur für die Redaktion offen."
+    message = "Die Ultra-Akte ist bisher nur für die Redaktion offen."
 
     def has_permission(self, request, view):
         return ist_redaktion(request.user)

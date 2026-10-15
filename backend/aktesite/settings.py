@@ -218,7 +218,7 @@ AKTE_ARCHIVE_ORG_SCHLUESSEL = os.environ.get("AKTE_ARCHIVE_ORG_SCHLUESSEL", "")
 AKTE_EINSPIELER_WURZELN = _liste("AKTE_EINSPIELER_WURZELN", "", ";")
 # Kennung beim Abruf fremder Seiten (bitte mit Kontakt-URL deiner Instanz).
 AKTE_ABRUF_KENNUNG = os.environ.get(
-    "AKTE_ABRUF_KENNUNG", "Die-Akte/0.1 (+https://github.com/ThePyth0nKid/die-akte)"
+    "AKTE_ABRUF_KENNUNG", "Ultra-Akte/0.3 (+https://github.com/ThePyth0nKid/ultra-akte)"
 )
 # Beweisschicht: Sicherungen und Freigaben als signierte, verkettete Ereignisse (akte/beweisschicht.py).
 AKTE_BEWEISSCHICHT = _schalter("AKTE_BEWEISSCHICHT", True)

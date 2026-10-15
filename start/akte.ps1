@@ -1,6 +1,6 @@
 ﻿# SPDX-License-Identifier: AGPL-3.0-or-later
 <#
-Die Akte – Starter für Windows (läuft mit Windows PowerShell 5.1, ohne Zusatzprogramme).
+Ultra-Akte – Starter für Windows (läuft mit Windows PowerShell 5.1, ohne Zusatzprogramme).
 
   akte.ps1 start     Docker prüfen und starten, Akte bauen und starten, Browser öffnen (Standard)
   akte.ps1 stop      Akte anhalten; die Daten bleiben
@@ -54,8 +54,8 @@ foreach ($weiteres in $args) {
     }
 }
 
-$AkteVersion = '0.2.0'
-$McpQuelle = "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v$AkteVersion.zip#subdirectory=mcp"
+$AkteVersion = '0.3.0'
+$McpQuelle = "https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v$AkteVersion.zip#subdirectory=mcp"
 if ($env:AKTE_MCP_QUELLE) { $McpQuelle = $env:AKTE_MCP_QUELLE }
 # uv lädt den Akte-Baustein für Claude. Feste Version des offiziellen Installers; die geladene Datei muss genau diese
 # Prüfsumme haben, sonst läuft sie nicht (neue Version: Datei laden, Get-FileHash, beide Werte hier und in akte.sh).
@@ -375,7 +375,7 @@ function Akte-Laeuft {
 
 function Meldung-DockerFehlt {
     Schreib ''
-    Schreib 'Docker Desktop fehlt. Die Akte läuft in Docker, deshalb brauchst du es einmal.' Yellow
+    Schreib 'Docker Desktop fehlt. Die Ultra-Akte läuft in Docker, deshalb brauchst du es einmal.' Yellow
     Schreib 'Installieren (PowerShell, eine Zeile):'
     Schreib '  winget install -e --id Docker.DockerDesktop'
     Schreib 'Dabei wichtig:'
@@ -468,7 +468,7 @@ function Sichere-Port {
     for ($p = $port + 1; $p -le $port + 20; $p++) {
         if (Port-Frei $p) {
             Setze-EnvWert 'AKTE_PORT' "$p"
-            Schreib "Die Akte nimmt stattdessen Port $p (gespeichert in .env als AKTE_PORT=$p)."
+            Schreib "Die Ultra-Akte nimmt stattdessen Port $p (gespeichert in .env als AKTE_PORT=$p)."
             Schreib 'War Claude schon mit der Akte verbunden: start\AGENT-VERBINDEN.cmd noch einmal ausführen.'
             return $p
         }
@@ -499,7 +499,7 @@ function Pruefe-AkteLaeuft {
         Ende 4
     }
     if (-not (Akte-Laeuft)) {
-        Schreib 'Die Akte läuft nicht. Starte sie zuerst:' Yellow
+        Schreib 'Die Ultra-Akte läuft nicht. Starte sie zuerst:' Yellow
         Schreib '  Doppelklick auf start\START-AKTE.cmd'
         Schreib "  (Agent: $AgentAufruf start -Still)"
         Ende 10
@@ -564,7 +564,7 @@ function Zeige-Einrichtung([string]$Basis) {
     # Der Code geht nur an den Browser (Fragment der Adresse), nie in eine Konsole, auch nicht nach einem Doppelklick.
     $seite = "$Basis/akte/einrichten"
     $code = Code-Anzeige (Env-Wert 'AKTE_EINRICHTUNGSCODE')
-    Schreib 'Die Akte läuft. Jetzt fehlt nur noch dein erstes Konto.' Green
+    Schreib 'Die Ultra-Akte läuft. Jetzt fehlt nur noch dein erstes Konto.' Green
     $ziel = $seite
     if ($code) { $ziel = $seite + '#code=' + $code }
     $imBrowser = Oeffne-Browser $ziel
@@ -644,7 +644,7 @@ function Hole-Status {
 # ─── Befehle ─────────────────────────────────────────────────────────────────────────────────────────────────
 function Befehl-Start {
     Pruefe-Entpackt
-    Schreib 'Die Akte startet.' Cyan
+    Schreib 'Die Ultra-Akte startet.' Cyan
     Pruefe-Platz
     $script:Docker = Finde-Docker
     if (-not $script:Docker) { Meldung-DockerFehlt; Ende 3 }
@@ -652,7 +652,7 @@ function Befehl-Start {
     Sichere-EnvDatei
     $port = Sichere-Port
 
-    Schreib 'Die Akte wird gebaut und gestartet. Beim ersten Mal dauert das 3 bis 10 Minuten.'
+    Schreib 'Die Ultra-Akte wird gebaut und gestartet. Beim ersten Mal dauert das 3 bis 10 Minuten.'
     $argumente = @('compose', 'up', '-d', '--build', '--wait')
     $code = 0
     if ($Still) {
@@ -702,7 +702,7 @@ function Befehl-Start {
         Zeige-Einrichtung $basis
     } else {
         $url = "$basis/akte"
-        Schreib "Die Akte läuft: $url" Green
+        Schreib "Die Ultra-Akte läuft: $url" Green
         if (-not $stand.Erreichbar) { Schreib 'Die Seite antwortet noch nicht. Warte eine Minute und lade sie dann neu.' Yellow }
         if ($stand.Grund -eq 'eingerichtet') { Entferne-VerbrauchtenCode }
         elseif ($stand.Grund -eq 'kein_code') { Meldung-KeinCode }
@@ -730,7 +730,7 @@ function Befehl-Stop {
         if ($kennungen.Count -gt 0) { $r = Invoke-Nativ $script:Docker (@('stop') + $kennungen) -Sekunden 180 }
     }
     if ($r.Code -eq 0) {
-        Schreib 'Die Akte ist angehalten. Deine Daten bleiben erhalten.' Green
+        Schreib 'Die Ultra-Akte ist angehalten. Deine Daten bleiben erhalten.' Green
         Schreib 'Wieder starten: start\START-AKTE.cmd'
         Ende 0
     }
@@ -968,7 +968,7 @@ function Befehl-Agent {
 }
 
 function Befehl-Hilfe {
-    Schreib 'Die Akte – Starter für Windows'
+    Schreib 'Ultra-Akte – Starter für Windows'
     Schreib ''
     Schreib "  $AgentAufruf start      starten (Standard)"
     Schreib "  $AgentAufruf stop       anhalten"
@@ -1009,6 +1009,6 @@ try {
     Schreib ''
     Schreib "Unerwarteter Fehler: $($_.Exception.Message)" Red
     Schreib "Stelle: $($_.InvocationInfo.PositionMessage)"
-    Schreib 'Bitte melde das mit dieser Ausgabe: https://github.com/ThePyth0nKid/die-akte/issues'
+    Schreib 'Bitte melde das mit dieser Ausgabe: https://github.com/ThePyth0nKid/ultra-akte/issues'
     Ende 1
 }

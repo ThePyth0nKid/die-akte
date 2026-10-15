@@ -122,14 +122,14 @@ export default function Einrichten() {
           Erster Start
         </p>
         <h1 className="font-[family-name:var(--font-akte-titel)] text-5xl uppercase leading-none tracking-wide sm:text-6xl">
-          Die Akte einrichten
+          Ultra-Akte einrichten
         </h1>
 
         {zustand === "laedt" && <p className="mt-8 text-[#8A94A0]" role="status">Prüfe, ob die Akte schon ein Konto hat …</p>}
 
         {zustand === "unerreichbar" && (
           <div className="mt-8 rounded-lg border border-[#FF1744]/50 bg-[#FF1744]/10 p-5" role="alert">
-            <p>Die Akte antwortet gerade nicht oder ist beschäftigt. Warte einen Moment und prüf noch einmal. Läuft sie
+            <p>Die Ultra-Akte antwortet gerade nicht oder ist beschäftigt. Warte einen Moment und prüf noch einmal. Läuft sie
               nicht, starte sie neu (START-AKTE).</p>
             <button type="button" onClick={nochmal}
               className="mt-4 min-h-11 cursor-pointer rounded-md border border-[#222636] px-4 text-sm hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-[#f0c674]">
@@ -140,7 +140,7 @@ export default function Einrichten() {
 
         {zustand === "zu" && (
           <div className="mt-8 rounded-lg border border-[#222636] bg-[#0d0e14] p-5">
-            <p className="text-lg">Die Akte ist schon eingerichtet.</p>
+            <p className="text-lg">Die Ultra-Akte ist schon eingerichtet.</p>
             <p className="mt-1 text-sm text-[#8A94A0]">Melde dich mit deinem Konto an.</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href="/login?redirect=%2Fakte"

@@ -1,6 +1,6 @@
 # Sicherheit und Beweiskraft
 
-Was die Akte schützt, was eine gültige Beweiskette beweist – und was nicht. Stand: Version 0.2.
+Was die Ultra-Akte schützt, was eine gültige Beweiskette beweist – und was nicht. Stand: Version 0.3.
 
 ## Grundannahmen
 
@@ -153,7 +153,8 @@ Format: [`atlas-trace-v1`](https://github.com/ThePyth0nKid/atlas) (Prüfer unter
   die Sicherung läuft, auch für Quellen, die ein Werkzeug angelegt hat. Nie hinaus gehen Adressen mit Zugangsdaten,
   mit Zugangs-Parametern (signierte Links, `token`, `key`, `session` …) und aus dem eigenen Netz.
 * **Abruf von deinem Anschluss:** Die Beweissicherung lädt jede Quelle selbst. Die Gegenseite sieht deine IP-Adresse
-  und die Kennung „Die-Akte … Beweissicherung“. Wer das nicht will, lädt die Quelle als Datei hoch.
+  und die Kennung „Ultra-Akte/0.3 … Beweissicherung“, die bei allen Installationen gleich ist und die Akte als
+  Absender erkennbar macht (ändern mit `AKTE_ABRUF_KENNUNG`). Wer das nicht will, lädt die Quelle als Datei hoch.
 * **Beweis-Speicher:** Kopien werden vollständig geschrieben und erst dann sichtbar; beim Lesen wird die Prüfsumme
   verglichen, eine veränderte Kopie wird nie ausgeliefert.
 * **Privatpersonen:** öffentlich nur mit Initialen, ohne Kennung, die sich über Boards verknüpfen ließe; Verdacht und
@@ -168,8 +169,8 @@ Wer die Akte einrichtet, vertraut diesen Stellen. Was davon fest ist und was nic
 
 | Teil | Woher | Fest? | Wer vertraut wem |
 |---|---|---|---|
-| Die Akte selbst (Starter, Backend, Oberfläche) | Release-ZIP zum Git-Tag `v0.2.0` auf GitHub | Ein Tag ist ein Verweis auf einen Commit. Der Besitzer des Repos könnte ihn verschieben. Die SHA-256-Prüfsumme der ZIP steht in den Release-Notizen; vergleichen mit `Get-FileHash DATEI` bzw. `shasum -a 256 DATEI`. GitHub packt die ZIP selbst; ihre Prüfsumme bleibt in der Praxis gleich, garantiert ist das nicht. Fester ist der Commit-Hash in den Release-Notizen. | du dem Konto `ThePyth0nKid` bei GitHub |
-| Der Baustein für Claude (`akte-mcp`) | dieselbe Release-ZIP (`…/v0.2.0.zip#subdirectory=mcp`), seine Python-Pakete von PyPI | Pakete nur mit Mindest- und Höchstversion, nicht auf Prüfsummen festgelegt | du PyPI und den Paket-Autoren |
+| Die Akte selbst (Starter, Backend, Oberfläche) | Release-ZIP zum Git-Tag `v0.3.0` auf GitHub | Ein Tag ist ein Verweis auf einen Commit. Der Besitzer des Repos könnte ihn verschieben. Die SHA-256-Prüfsumme der ZIP steht in den Release-Notizen; vergleichen mit `Get-FileHash DATEI` bzw. `shasum -a 256 DATEI`. GitHub packt die ZIP selbst; ihre Prüfsumme bleibt in der Praxis gleich, garantiert ist das nicht. Fester ist der Commit-Hash in den Release-Notizen. | du dem Konto `ThePyth0nKid` bei GitHub |
+| Der Baustein für Claude (`akte-mcp`) | dieselbe Release-ZIP (`…/v0.3.0.zip#subdirectory=mcp`), seine Python-Pakete von PyPI | Pakete nur mit Mindest- und Höchstversion, nicht auf Prüfsummen festgelegt | du PyPI und den Paket-Autoren |
 | uv | offizieller Installer von astral.sh in der festen Version 0.12.21 | Der Starter prüft die SHA-256 der Installer-Datei gegen den Wert im Starter und führt sie sonst nicht aus. Der Installer lädt dann uv dieser Version von GitHub. | du astral.sh und GitHub |
 | Python 3.12 für den Baustein | uv lädt es (python-build-standalone) | Version 3.12, kleinere Updates offen | du astral.sh |
 | Docker Desktop | winget bzw. docker.com | neueste Version | du Docker Inc. und Microsoft (winget) |
