@@ -1,18 +1,70 @@
-# Die Akte
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/bilder/readme/wortmarke-dunkel.svg">
+    <img src="docs/bilder/readme/wortmarke-hell.svg" alt="Ultra-Akte: Dienstsiegel, ein Achteck mit der Umschrift ULTRA und AKTE, innen ein A mit rotem Faden als Querstrich" width="320">
+  </picture>
+</p>
 
-Die Akte ist eine Ermittler-Wand für deinen eigenen Rechner: Karten für Personen, Firmen, Behörden und Gesetze,
+<p align="center"><b>Eine Ermittler-Wand mit Belegpflicht und Beweiskette – gebaut für Recherche mit KI-Agenten.</b></p>
+
+<p align="center">
+  <a href="https://github.com/ThePyth0nKid/ultra-akte/releases"><img src="https://img.shields.io/github/v/release/ThePyth0nKid/ultra-akte?label=Version&amp;color=C8102E" alt="Neueste Version der Akte"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-AGPL--3.0-3b7dd8" alt="Lizenz AGPL-3.0"></a>
+  <a href="https://github.com/ThePyth0nKid/ultra-akte/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ThePyth0nKid/ultra-akte/ci.yml?branch=main&amp;label=CI" alt="Status der CI auf main"></a>
+  <a href="https://github.com/ThePyth0nKid/ultra-akte/actions/workflows/leckschutz.yml"><img src="https://img.shields.io/github/actions/workflow/status/ThePyth0nKid/ultra-akte/leckschutz.yml?branch=main&amp;label=Leckschutz" alt="Status des Leckschutzes auf main"></a>
+  <a href="REUSE.toml"><img src="https://img.shields.io/badge/REUSE-konform-2ea44f" alt="Lizenzangaben nach REUSE"></a>
+  <img src="https://img.shields.io/badge/l%C3%A4uft%20auf-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555" alt="Läuft auf Windows, macOS und Linux">
+</p>
+
+<p align="center">
+  <b>Deutsch</b> · <a href="README.en.md">English</a> · <a href="#schnellstart-in-drei-schritten-windows">Schnellstart</a> · <a href="#was-die-akte-kann">Was sie kann</a> · <a href="#für-ki-agenten-so-richtest-du-die-akte-für-deinen-menschen-ein">Für KI-Agenten</a> · <a href="AGENTS.md">AGENTS.md</a> · <a href="docs/erste-schritte.md">Erste Schritte</a>
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/bilder/readme/kopf-dunkel.webp">
+  <img src="docs/bilder/readme/kopf-hell.webp" alt="Ausschnitt der Wand mit vier Karten: Foto der Senatorin Erika Mustermann, Wappen des Senats, Foto der Verkehrskameras und Logo der Kranich Holding. Dazwischen ein belegter Faden, eine Meinung und ein Verdacht (erfundene Demo-Daten)" width="100%">
+</picture>
+<p align="center"><sub>Alles erfunden: die Demo „Freie Stadt Musterhafen“. Die Fotos sind KI-Bilder und auf jeder Karte so gekennzeichnet.</sub></p>
+
+Die Ultra-Akte ist eine Ermittler-Wand für deinen eigenen Rechner: Karten für Personen, Firmen, Behörden und Gesetze,
 verbunden durch Fäden. Jeder Faden braucht einen Beleg, also eine Quelle mit wörtlichem Zitat. KI-Agenten wie
 Claude Code recherchieren und legen Entwürfe an; sichtbar wird nur, was ein Mensch geprüft und mit seiner
 Unterschrift freigegeben hat.
 
-[English version](README.en.md) · [Erste Schritte mit Bildern](docs/erste-schritte.md) ·
-[Fachwörter erklärt](docs/woerter.md) · [Anleitung für Agenten](AGENTS.md)
+*Agenten recherchieren, Regeln beraten, der Mensch entscheidet und unterschreibt.*
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/bilder/readme/fahrt-standbild.webp">
+  <img src="docs/bilder/readme/fahrt.webp" alt="Kamerafahrt über die Demo-Wand: erst die ganze Wand, dann der Auftrag an die Nordlicht Analytik mit dem Zitat aus der Drucksache, dann die Eigentümer und der Rechnungshof (erfundene Demo-Daten)" width="100%">
+</picture>
+<p align="center"><sub>Eine Kamerafahrt, Bild für Bild aus der Akte gerendert. Dieselbe Fahrt wird auf Wunsch ein Video mit Stimme und Musik.</sub></p>
+
+![Drei Kacheln: die Wand mit Karten und Fäden, ein Beleg mit markiertem Zitat in der gesicherten Drucksache und eine unterschriebene Karte mit Siegel (erfundene Demo-Daten)](docs/bilder/readme/kacheln.webp)
+
+## So läuft eine Recherche
+
+Ein Agent legt Karten, Fäden und Quellen an, freigeben kann er nichts. Die Prüfung meldet, was fehlt, und eine
+Sperre hält einen Faden auf, bis ein Mensch sie mit Begründung überstimmt. Erst die Unterschrift macht aus einem
+Entwurf etwas, das Leser sehen.
+
+```mermaid
+flowchart LR
+    A["KI-Agent recherchiert"] --> B["Entwurf auf der Wand"]
+    B --> C{"Regeln"}
+    C -- "Hinweis" --> D["Mensch prüft die Belege"]
+    C -- "Sperre" --> E["nur mit Begründung"]
+    E --> D
+    D --> F["Unterschrift im Browser"]
+    F --> G["Beweiskette"]
+    G --> H["Lesen, Export, Video"]
+```
 
 **Windows, macOS und Linux.** Die Akte läuft auf allen drei Systemen, und wir wollen, dass alles auf allen dreien
 geht. Der Schnellstart unten zeigt Windows; derselbe Weg für Mac und Linux steht in
 [Erste Schritte](docs/erste-schritte.md#mac-und-linux). Die Starter prüft die CI bei jeder Änderung unter Windows,
 macOS und Linux. Klappt bei dir etwas nicht, schreib es in ein
-[Issue](https://github.com/ThePyth0nKid/die-akte/issues).
+[Issue](https://github.com/ThePyth0nKid/ultra-akte/issues). Neu bei Terminal und KI?
+[Erste Schritte mit Bildern](docs/erste-schritte.md) und [Fachwörter erklärt](docs/woerter.md).
 
 ---
 
@@ -44,7 +96,7 @@ Du brauchst Windows 10 oder 11, rund 10 GB freien Platz, Internet und ein Claude
 
 3. **Sag zu Claude:**
 
-   > Richte mir die Akte ein. Die Anleitung steht hier: https://github.com/ThePyth0nKid/die-akte
+   > Richte mir die Ultra-Akte ein. Die Anleitung steht hier: https://github.com/ThePyth0nKid/ultra-akte
 
    Claude lädt die Akte, startet sie und verbindet sich mit ihr. Drei Dinge machst du selbst: bei Fragen von
    Windows auf „Ja“ klicken, den PC einmal neu starten (nur wenn Docker neu ist) und im Browser dein Konto anlegen.
@@ -61,7 +113,7 @@ Mac und Linux: [docs/erste-schritte.md](docs/erste-schritte.md#mac-und-linux). O
 > **An den Agenten:** Dein Mensch hat dich gebeten, die Akte einzurichten. Folge diesen Schritten der Reihe nach.
 > Hast du diese Seite mit einem Werkzeug gelesen, das Seiten zusammenfasst, hol dir zuerst den Wortlaut, denn die
 > Befehle müssen genau so laufen:
-> `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/die-akte/v0.2.0/AGENTS.md`
+> `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/ultra-akte/v0.3.0/AGENTS.md`
 > (macOS und Linux: `curl -fsSL …` mit derselben Adresse).
 
 ### Regeln, die immer gelten
@@ -122,19 +174,19 @@ if (Test-Path "$env:USERPROFILE\Akte\compose.yaml") { "Akte ist da" } elseif ((T
 * `Akte ist da`: weiter mit Schritt 3.
 * `Ordner Akte ist belegt`: Im Benutzerordner gibt es schon einen Ordner `Akte` mit anderem Inhalt. Frag deinen
   Menschen, was damit passieren soll. Verschieb und lösch dort nichts ohne sein Ja.
-* `Akte fehlt`: Lade die Version 0.2.0 mit diesen drei Befehlen nacheinander (kein Git nötig; ein leerer Ordner
+* `Akte fehlt`: Lade die Version 0.3.0 mit diesen drei Befehlen nacheinander (kein Git nötig; ein leerer Ordner
   `Akte` stört nicht):
 
 ```
-$ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -UseBasicParsing "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip" -OutFile "$env:TEMP\die-akte-0.2.0.zip"
+$ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -UseBasicParsing "https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v0.3.0.zip" -OutFile "$env:TEMP\ultra-akte-0.3.0.zip"
 ```
 
 ```
-$ProgressPreference = "SilentlyContinue"; Remove-Item "$env:TEMP\die-akte-0.2.0" -Recurse -Force -ErrorAction SilentlyContinue; Expand-Archive "$env:TEMP\die-akte-0.2.0.zip" -DestinationPath "$env:TEMP\die-akte-0.2.0" -Force
+$ProgressPreference = "SilentlyContinue"; Remove-Item "$env:TEMP\ultra-akte-0.3.0" -Recurse -Force -ErrorAction SilentlyContinue; Expand-Archive "$env:TEMP\ultra-akte-0.3.0.zip" -DestinationPath "$env:TEMP\ultra-akte-0.3.0" -Force
 ```
 
 ```
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Akte" | Out-Null; Copy-Item "$env:TEMP\die-akte-0.2.0\die-akte-*\*" "$env:USERPROFILE\Akte" -Recurse -Force
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Akte" | Out-Null; Copy-Item "$env:TEMP\ultra-akte-0.3.0\*-akte-*\*" "$env:USERPROFILE\Akte" -Recurse -Force
 ```
 
 ### Schritt 3: Die Akte starten
@@ -198,7 +250,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Akte\start
 Der Starter installiert bei Bedarf uv in einer festen Version (offizieller Installer von astral.sh, Prüfsumme
 geprüft), trägt `%USERPROFILE%\.local\bin` dauerhaft in den Pfad ein, holt den Token, ersetzt einen alten Eintrag
 `akte` und trägt die Akte bei Claude Code ein:
-`claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.2.0.zip#subdirectory=mcp" akte-mcp`.
+`claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.3.0.zip#subdirectory=mcp" akte-mcp`.
 Danach lädt er den Akte-Baustein einmal vor. Gibt es mehrere Konten, meldet er Rückgabewert 9; frag deinen
 Menschen, welches Konto du benutzen sollst, und häng `-Konto NAME` an.
 
@@ -272,7 +324,7 @@ Gleiche Schritte, andere Befehle:
    deinen Menschen):
 
    ```
-   mkdir -p "$HOME/Akte" && curl -fsSL https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.tar.gz | tar -xz -C "$HOME/Akte" --strip-components=1
+   mkdir -p "$HOME/Akte" && curl -fsSL https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v0.3.0.tar.gz | tar -xz -C "$HOME/Akte" --strip-components=1
    ```
 
 3. Starten: `bash ~/Akte/start/akte.sh start --still` (öffnet den Browser mit eingetragenem Code)
@@ -293,7 +345,7 @@ Für alle, die ohne Agent einrichten wollen. Mit Bildern: [docs/erste-schritte.m
    AMD64“ (fast jeder PC; „ARM64“ nur bei Geräten mit Snapdragon-Chip). Im Installer **„All-users installation“**
    wählen und bei der Windows-Frage „Ja“ klicken. Die vorgewählte „Per-user installation“ scheitert auf frischem
    Windows. Danach den PC neu starten, im WSL-Fenster eine Taste drücken, im Docker-Fenster „Accept“ klicken.
-2. **Die Akte laden:** https://github.com/ThePyth0nKid/die-akte/releases/tag/v0.2.0 → „Source code (zip)“. Die
+2. **Die Akte laden:** https://github.com/ThePyth0nKid/ultra-akte/releases/tag/v0.3.0 → „Source code (zip)“. Die
    ZIP-Datei mit Rechtsklick → „Alle extrahieren“ entpacken. Aus der ZIP heraus startet die Akte nicht.
 3. **Starten:** im entpackten Ordner `start` die Datei `START-AKTE` doppelklicken. Windows warnt „Der Herausgeber
    konnte nicht verifiziert werden“: „Ausführen“. Der Starter wartet auf Docker, baut die Akte (beim ersten Mal 3
@@ -351,6 +403,61 @@ ab, was du dafür nicht brauchst.
 
 ## Was die Akte kann
 
+### Karten mit Bild, wo es passt
+
+![Kartengalerie: KI-Foto einer Person, eines Gebäudes und einer Anlage, ein gezeichnetes Wappen, ein Logo, eine Privatperson nur mit Initialen und ein Gesetz ohne Bildfeld (erfundene Demo-Daten)](docs/bilder/readme/kartengalerie.webp)
+
+Personen, Firmen, Behörden, Systeme und Gesetze liegen als Karten auf der Wand. Zu jedem Bild gehört ein Nachweis,
+der auf der Karte steht: Urheber und Lizenz, in der Demo „KI-Bild · erfundene Person“. Logos und Wappen zeigt die
+Akte ganz, auf hellem Grund. Eine Privatperson bekommt kein Foto, und Leser sehen von ihr nur die Initialen.
+
+### Drei Arten von Fäden
+
+![Die drei Faden-Arten: belegt als durchgezogene rote Linie, Verdacht gestrichelt mit Stempel, Meinung gepunktet in Ocker mit Stempel (erfundene Demo-Daten)](docs/bilder/readme/faden-arten.webp)
+
+Ein Faden ist eine Aussage mit Art, Zeitraum und mindestens einem Beleg. Wie er aussieht, sagt, was er behauptet.
+Bei einem Verdacht gegen eine Person meldet die Prüfung, wenn Anhörung oder zweite unabhängige Quelle fehlen. Gegen
+eine Privatperson sperrt sie ihn ganz.
+
+### Jeder Beleg mit Wortlaut und Fundstelle
+
+![Ein Beleg in der Großansicht: die gesicherte Drucksache 9/1234 mit dem gelb markierten Zitat, darunter Quelle, Sicherungsdatum und SHA-256 (erfundene Demo-Daten)](docs/bilder/readme/beleg.webp)
+
+Die Akte sichert jede Quelle mit Prüfsumme und sucht das Zitat selbst in der gesicherten Kopie (gibt es keine, im
+Original). Findet sie es, markiert sie die Stelle wie hier. Weicht das Zitat ab, meldet sie `nicht_gefunden`, auch
+dem Agenten. Die Demo enthält dafür absichtlich ein Zitat, dem ein Wort fehlt.
+
+### Regeln beraten, du entscheidest
+
+![Der Dialog „Regeln und Veröffentlichen“: zwölf Regeln, jede auf Hinweis oder sperrt stellbar; Verdacht und Familienbande von Privatpersonen sperren (erfundene Demo-Daten)](docs/bilder/readme/regeln.webp)
+
+Jede Regel stellst du je Board auf *aus*, *Hinweis* oder *sperrt*. Ein Hinweis zeigt einen Befund und hält nichts
+auf. Eine Sperre hält den Faden aus der Lese-Ansicht, bis du sie bei der Freigabe überstimmst, mit Begründung:
+
+![Der Dialog „Begründung nötig“: Familienbande von Privatpersonen bleiben intern; ein Feld fragt, warum du trotzdem freigibst (erfundene Demo-Daten)](docs/bilder/readme/gesperrt.webp)
+
+### Leser sehen nur Unterschriebenes
+
+![Die Lese-Ansicht eines öffentlich geschalteten Boards ohne Anmeldung: Max Mustermann mit gekennzeichnetem KI-Foto und seinem belegten Faden, daneben die Privatperson nur als „T. B.“ (erfundene Demo-Daten)](docs/bilder/readme/leseansicht.webp)
+
+Leser sehen nur Karten und belegte Fäden, die ein Mensch unterschrieben hat und die die Prüfung bestehen. Meinungen
+stehen dort auf eigenen Zetteln, Privatpersonen nur mit Initialen. Leser sind Konten mit Lesezugriff und, wenn du ein
+Board öffentlich schaltest, alle ohne Anmeldung. Öffentliches Lesen ist ab Werk aus.
+
+### Live auf der Wand
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/bilder/readme/live-standbild.webp">
+  <img src="docs/bilder/readme/live.webp" alt="Live-Wand: Ein Agent legt die Karte „Bürgerschaft Musterhafen“ an, sie erscheint mit dem Stempel „neu“, kurz darauf der belegte Faden zum Senat; der Zähler springt auf zwei Entwürfe (erfundene Demo-Daten)" width="100%">
+</picture>
+
+Was ein Agent anlegt, erscheint nach wenigen Sekunden auf der offenen Wand, als Entwurf mit dem Stempel „neu“.
+Kamera, Auswahl und offene Formulare bleiben, wie sie sind.
+
+<sub>Alle Bildschirmfotos und Animationen dieser Seite erzeugt [`werkzeuge/readme_bilder`](werkzeuge/readme_bilder/README.md) aus der Demo.</sub>
+
+### Unter der Haube
+
 Eine gewöhnliche Datenbank mit drei Schichten darüber:
 
 1. **Regeln im Datenmodell.** Ein Faden zwischen zwei Karten (Personen, Firmen, Behörden, Gesetze …) ist eine
@@ -385,7 +492,7 @@ docker compose exec api python manage.py akte_token DEIN-KONTO
 ```
 
 ```
-claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=mcp" akte-mcp
+claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v0.3.0.zip#subdirectory=mcp" akte-mcp
 ```
 
 Ohne Token sieht Claude bei einer lokalen Akte nichts. Alles, was ein Agent anlegt, ist ein Entwurf. Werkzeuge und
@@ -394,7 +501,7 @@ Arbeitsweise: [docs/mcp.md](docs/mcp.md).
 ## Beweiskette prüfen – ohne dem Server zu vertrauen
 
 ```
-uv tool install --python 3.12 "akte-mcp[beweis] @ https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=mcp"
+uv tool install --python 3.12 "akte-mcp[beweis] @ https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v0.3.0.zip#subdirectory=mcp"
 ```
 
 ```
@@ -405,7 +512,14 @@ Geprüft werden Hashes, Ed25519-Signaturen, die lückenlose Reihenfolge, Rollen 
 Widerrufe und die offengelegten Inhalte. Mit `--atlas` zusätzlich durch den WASM-Prüfer von Atlas. Was eine gültige
 Kette beweist und was nicht: [docs/sicherheit.md](docs/sicherheit.md).
 
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/bilder/readme/terminal-standbild.webp">
+  <img src="docs/bilder/readme/terminal.webp" alt="Terminal: akte pruefe-signaturen --atlas meldet jede Prüfung mit Haken und eine gültige Kette, auch im Atlas-Prüfer; akte zitat-pruefen findet ein Zitat in der Drucksache und meldet beim absichtlich falschen „nicht_gefunden“ (erfundene Demo-Daten)" width="100%">
+</picture>
+
 ## Freigeben heißt unterschreiben
+
+![Der Dialog „Diesen Faden unterschreiben?“: Von, Nach, Art, Aussage „Verdacht – noch nicht bewiesen“ und der Beleg mit Zitat und Prüfsumme in Klartext, darunter „Mit meinem Schlüssel unterschreiben“ (erfundene Demo-Daten)](docs/bilder/readme/unterschrift.webp)
 
 Wählst du in der Oberfläche „Freigeben (unterschreiben)“, erzeugt dein Browser beim ersten Mal ein
 Ed25519-Schlüsselpaar. Der private Schlüssel ist nicht exportierbar und verlässt den Browser nie; der Server kennt
@@ -418,7 +532,9 @@ unterschrieben hat. Regeln und Stufen: [docs/belegregeln.md](docs/belegregeln.md
 
 ## Videos aus der Wand
 
-Einmal einrichten (Node, Python und ffmpeg müssen installiert sein), dann rendern:
+![Dieselbe Station der Kamerafahrt in drei Formaten: 16:9 für Langvideos, 9:16 für Shorts, Reels und TikTok, 1:1 für Beiträge im Feed (erfundene Demo-Daten)](docs/bilder/readme/formate.webp)
+
+Jedes Format bekommt seinen eigenen Ausschnitt, und Titel bleiben lesbar groß. Einmal einrichten (Node, Python und ffmpeg müssen installiert sein), dann rendern:
 
 ```
 cd render; npm ci; npx playwright install chromium; cd ..
@@ -463,6 +579,7 @@ cd web && npm ci && AKTE_OHNE_PROXY=1 npm run dev     # http://localhost:3000/ak
 | `mcp/` | `akte-mcp`, Python-Client, CLI `akte` | MIT |
 | `beweis/` | `akte-beweis`: Atlas-Format, Prüfung, Richtlinie | MIT |
 | `skills/` | Skill für Claude Code: an der Akte arbeiten | MIT |
+| `werkzeuge/` | Leckschutz-Prüfer, Bilder dieser README, Hilfsskripte | MIT |
 | `docs/`, `AGENTS.md` | Anleitungen | CC BY 4.0 |
 
 ## Mitmachen

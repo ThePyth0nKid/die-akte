@@ -1,4 +1,4 @@
-# AGENTS.md – Die Akte
+# AGENTS.md – Ultra-Akte
 
 Anleitung für KI-Agenten (Claude Code, Codex und andere). Zwei Fälle:
 
@@ -12,7 +12,7 @@ Anleitung für KI-Agenten (Claude Code, Codex und andere). Zwei Fälle:
 > **An den Agenten:** Dein Mensch hat dich gebeten, die Akte einzurichten. Folge diesen Schritten der Reihe nach.
 > Hast du diese Seite mit einem Werkzeug gelesen, das Seiten zusammenfasst, hol dir zuerst den Wortlaut, denn die
 > Befehle müssen genau so laufen:
-> `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/die-akte/v0.2.0/AGENTS.md`
+> `curl.exe -fsSL https://raw.githubusercontent.com/ThePyth0nKid/ultra-akte/v0.3.0/AGENTS.md`
 > (macOS und Linux: `curl -fsSL …` mit derselben Adresse).
 
 ### Regeln, die immer gelten
@@ -73,19 +73,19 @@ if (Test-Path "$env:USERPROFILE\Akte\compose.yaml") { "Akte ist da" } elseif ((T
 * `Akte ist da`: weiter mit Schritt 3.
 * `Ordner Akte ist belegt`: Im Benutzerordner gibt es schon einen Ordner `Akte` mit anderem Inhalt. Frag deinen
   Menschen, was damit passieren soll. Verschieb und lösch dort nichts ohne sein Ja.
-* `Akte fehlt`: Lade die Version 0.2.0 mit diesen drei Befehlen nacheinander (kein Git nötig; ein leerer Ordner
+* `Akte fehlt`: Lade die Version 0.3.0 mit diesen drei Befehlen nacheinander (kein Git nötig; ein leerer Ordner
   `Akte` stört nicht):
 
 ```
-$ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -UseBasicParsing "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip" -OutFile "$env:TEMP\die-akte-0.2.0.zip"
+$ProgressPreference = "SilentlyContinue"; Invoke-WebRequest -UseBasicParsing "https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v0.3.0.zip" -OutFile "$env:TEMP\ultra-akte-0.3.0.zip"
 ```
 
 ```
-$ProgressPreference = "SilentlyContinue"; Remove-Item "$env:TEMP\die-akte-0.2.0" -Recurse -Force -ErrorAction SilentlyContinue; Expand-Archive "$env:TEMP\die-akte-0.2.0.zip" -DestinationPath "$env:TEMP\die-akte-0.2.0" -Force
+$ProgressPreference = "SilentlyContinue"; Remove-Item "$env:TEMP\ultra-akte-0.3.0" -Recurse -Force -ErrorAction SilentlyContinue; Expand-Archive "$env:TEMP\ultra-akte-0.3.0.zip" -DestinationPath "$env:TEMP\ultra-akte-0.3.0" -Force
 ```
 
 ```
-New-Item -ItemType Directory -Force "$env:USERPROFILE\Akte" | Out-Null; Copy-Item "$env:TEMP\die-akte-0.2.0\die-akte-*\*" "$env:USERPROFILE\Akte" -Recurse -Force
+New-Item -ItemType Directory -Force "$env:USERPROFILE\Akte" | Out-Null; Copy-Item "$env:TEMP\ultra-akte-0.3.0\*-akte-*\*" "$env:USERPROFILE\Akte" -Recurse -Force
 ```
 
 ### Schritt 3: Die Akte starten
@@ -149,7 +149,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Akte\start
 Der Starter installiert bei Bedarf uv in einer festen Version (offizieller Installer von astral.sh, Prüfsumme
 geprüft), trägt `%USERPROFILE%\.local\bin` dauerhaft in den Pfad ein, holt den Token, ersetzt einen alten Eintrag
 `akte` und trägt die Akte bei Claude Code ein:
-`claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.2.0.zip#subdirectory=mcp" akte-mcp`.
+`claude mcp add --scope user akte … -- uvx --python 3.12 --from "…/v0.3.0.zip#subdirectory=mcp" akte-mcp`.
 Danach lädt er den Akte-Baustein einmal vor. Gibt es mehrere Konten, meldet er Rückgabewert 9; frag deinen
 Menschen, welches Konto du benutzen sollst, und häng `-Konto NAME` an.
 
@@ -223,7 +223,7 @@ Gleiche Schritte, andere Befehle:
    deinen Menschen):
 
    ```
-   mkdir -p "$HOME/Akte" && curl -fsSL https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.tar.gz | tar -xz -C "$HOME/Akte" --strip-components=1
+   mkdir -p "$HOME/Akte" && curl -fsSL https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v0.3.0.tar.gz | tar -xz -C "$HOME/Akte" --strip-components=1
    ```
 
 3. Starten: `bash ~/Akte/start/akte.sh start --still` (öffnet den Browser mit eingetragenem Code)
@@ -277,7 +277,7 @@ Fallen bei den Startern (`start/`):
 * Ein Einrichtungscode entsteht nur für eine Akte ohne Daten-Volume; nach der Einrichtung löscht der Starter ihn aus
   `.env`. Windows: `.env` nur für das eigene Konto (Zugriffsliste ganz ersetzt), macOS/Linux: `chmod 600`.
 * Die Version steht in jedem Starter genau einmal (`$AkteVersion` in `akte.ps1`, `AKTE_VERSION` in `akte.sh`); die
-  Prüfskripte lesen sie dort. In der Doku steht der Tag nur in Adressen als `/v0.2.0`.
+  Prüfskripte lesen sie dort. In der Doku steht der Tag nur in Adressen als `/v0.3.0`.
 * Programme mit vollem Pfad aufrufen (`%SystemRoot%\System32\…`), wo es geht: Auf manchen Rechnern ist der
   System-Pfad kaputt.
 * Neue Starter-Dateien ausführbar einchecken: `git add --chmod=+x start/akte.sh start/stop-akte.command`.
