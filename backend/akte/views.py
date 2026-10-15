@@ -6,6 +6,7 @@ Die öffentliche Wand ist doppelt verriegelt: ``settings.AKTE_OEFFENTLICH_AKTIV`
 Was sie dann zeigt, filtert ``pruefung.py`` Faden für Faden.
 """
 
+import hashlib
 import math
 from collections import defaultdict
 
@@ -25,7 +26,7 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from . import lesecache, menschenrecht, speicher
+from . import einstellungen, lesecache, menschenrecht, speicher
 from .export import vault_zip
 from .graph import finde_weg
 from .kamera import bild_fuer, format_name, karten_rechteck
@@ -229,7 +230,8 @@ class SichernDrossel(UserRateThrottle):
 
 
 class QuelleSichernView(Redaktion, APIView):
-    """„Neu sichern“: Original und archive.org noch einmal holen."""
+    """„Neu sichern“: Original (und archive.org, wenn eingeschaltet) noch einmal holen. Kehrt sofort zurück (202);
+    die Sicherung läuft im Hintergrund, ihr Ergebnis steht danach unter ``stand`` der Quelle."""
 
     throttle_classes = [SichernDrossel]
 
@@ -241,6 +243,55 @@ class QuelleSichernView(Redaktion, APIView):
             return Response({"detail": "Kein Beweis-Speicher eingerichtet."}, status=503)
         sicherung_anstossen(quelle)
         return Response({"angestossen": True}, status=202)
+
+
+class PruefenDrossel(UserRateThrottle):
+    rate = "300/hour"
+
+
+class BelegPruefenView(Redaktion, APIView):
+    """Steht das Zitat dieses Belegs wörtlich in seiner Quelle? Synchron, höchstens 30 s (``zitatpruefung.py``).
+
+    Antwort ``{"ergebnis": "gefunden" | "nicht_gefunden" | "nicht_pruefbar", "grund": str, "fundstelle": {…} | null}``.
+    Ändert weder Status noch Beleg, darum dürfen auch Werkzeuge (Token) prüfen; hat die Quelle noch gar keine eigene
+    Kopie, legt sie das geladene Original als erste Sicherung ab. Die Anfrage nimmt keine Adresse an: Geladen wird
+    höchstens das Original von der gespeicherten Adresse der Quelle, über den sicheren Abruf.
+    """
+
+    throttle_classes = [PruefenDrossel]
+
+    def post(self, request, pk):
+        from .zitatpruefung import pruefen
+
+        beleg = get_object_or_404(Beleg.objects.select_related("quelle"), pk=pk)
+        return Response(pruefen(beleg))
+
+
+class EinstellungenView(Redaktion, APIView):
+    """Einstellungen für die ganze Akte: ``{"archiv_org": bool}`` (Quellen zusätzlich bei archive.org sichern).
+
+    Lesen darf die Redaktion samt ihren Werkzeugen; ändern nur ein Mensch in der Oberfläche
+    (``menschenrecht.pruefe_einstellungen``): archive.org macht jede Quell-URL öffentlich.
+    """
+
+    def get(self, request):
+        return Response(einstellungen.als_dict())
+
+    def patch(self, request):
+        menschenrecht.pruefe_einstellungen(request)
+        daten = request.data if isinstance(request.data, dict) else None
+        if daten is None:
+            raise ValidationError({"detail": "Erwartet wird ein Objekt, z. B. {\"archiv_org\": false}."})
+        unbekannt = sorted(set(daten) - {"archiv_org"})
+        if unbekannt:
+            raise ValidationError({k: ["Unbekannte Einstellung."] for k in unbekannt})
+        if "archiv_org" in daten:
+            if not isinstance(daten["archiv_org"], bool):
+                raise ValidationError({"archiv_org": ["Bitte true oder false angeben."]})
+            with transaction.atomic():
+                einst = einstellungen.archiv_org_setzen(daten["archiv_org"], request.user)
+                protokolliere(einst, "geaendert", request.user)
+        return Response(einstellungen.als_dict())
 
 
 class AnhangDrossel(UserRateThrottle):
@@ -808,6 +859,57 @@ class BoardDetailView(_BoardLesen, MitVerlauf, generics.RetrieveUpdateDestroyAPI
         return Response(daten)
 
 
+def _redaktion_gemerkt(request) -> bool:
+    """``ist_redaktion`` einmal je Anfrage (Drossel und View fragen beide)."""
+    wert = getattr(request, "_akte_redaktion", None)
+    if wert is None:
+        wert = ist_redaktion(request.user)
+        request._akte_redaktion = wert
+    return wert
+
+
+class StandDrossel(UserRateThrottle):
+    """Deckel für das Abfragen des Stands (alle paar Sekunden je offenem Tab); die Redaktion bleibt ungebremst.
+    Eigener Zähler, damit das Abfragen nicht den Lese-Deckel der Mitglieder aufbraucht."""
+
+    scope = "akte_stand"
+
+    def get_rate(self):
+        return self.THROTTLE_RATES.get(self.scope, "120/min")
+
+    def allow_request(self, request, view):
+        if _redaktion_gemerkt(request):
+            return True
+        return super().allow_request(request, view)
+
+
+class BoardStandView(_BoardLesen, APIView):
+    """Live-Aktualisierung: ``{"stand": "<undurchsichtig>"}``, ändert sich, sobald sich an der Wand etwas ändert.
+
+    Gleiche Leserechte wie die Wand. Die Redaktion bekommt den Stand der Werkstatt: Board und eine Version, die jede
+    Änderung an Karten, Platzierungen, Fäden, Belegen, Zetteln, Rahmen, Mappen, Fahrten, Beweisstücken, Freigaben
+    und Sicherungen neu setzt (``lesecache``, Signale in ``apps.py``) – billig: das Board und ein Cache-Wert, nichts
+    wird geschrieben. Die Version gilt für die ganze Akte; eine Änderung an einer anderen Wand lädt diese also
+    unnötig, aber unschädlich neu.
+
+    Mitglieder und Besucher bekommen einen Fingerabdruck genau dessen, was sie sehen (die Lese-Ansicht, einmal je
+    Cache-Version gerechnet und gemerkt, ``lesecache.fingerabdruck``): Er verrät nicht, wann die Redaktion an
+    Entwürfen arbeitet.
+    """
+
+    throttle_classes = [StandDrossel]
+
+    def get(self, request, slug):
+        if _redaktion_gemerkt(request):
+            board = get_object_or_404(Board, slug=slug)
+            roh = f"werkstatt|{board.pk}|{board.geaendert_am.isoformat()}|{lesecache.werkstatt_version()}"
+        else:
+            lesbar = lese_boards(request.user)
+            board = get_object_or_404(Board, slug=slug, slug__in=lesbar)
+            roh = "lesen|" + lesecache.fingerabdruck(board.slug, lesbar, lambda: wand_fuer_mitglieder(board, lesbar))
+        return Response({"stand": hashlib.sha256(roh.encode("utf-8")).hexdigest()[:32]})
+
+
 class KarteListeView(Redaktion, APIView):
     def post(self, request, slug):
         board = _board(slug)
@@ -951,6 +1053,8 @@ class PositionenView(Redaktion, APIView):
             felder = {k: max(-1e7, min(1e7, v)) for k, v in felder.items()}
             if modell:
                 modell.objects.filter(board=board, pk=pk).update(**felder)
+        # .update() löst kein Signal aus: Lese-Cache und Stand der Wand selbst erneuern (Leser sehen die Lage).
+        lesecache.veraltet()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -1036,6 +1140,7 @@ class AufraeumenView(Redaktion, APIView):
         BoardKarte.objects.bulk_update(karten, ["x", "y"])
         Zettel.objects.bulk_update(zettel, ["x", "y"])
         Rahmen.objects.bulk_update(rahmen, ["x", "y", "breite", "hoehe"])
+        lesecache.veraltet()  # bulk_update löst kein Signal aus
         return Response(wand_daten(board))
 
 

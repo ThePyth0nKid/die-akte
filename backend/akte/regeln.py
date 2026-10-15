@@ -29,7 +29,8 @@ REGELN: dict[str, tuple[str, str]] = {
     "ohne_quelle": ("Faden ohne Beleg", HINWEIS),
     "quelle_ohne_adresse": ("Quelle ohne Link und ohne Datei", HINWEIS),
     "quelle_ohne_abruf": ("Quelle ohne Abrufdatum", HINWEIS),
-    "quelle_ohne_archiv": ("Quelle ohne Archivkopie", HINWEIS),
+    # Mit archive.org aus (Standard): Quelle ohne gesicherte eigene Kopie (pruefung._ohne_archiv).
+    "quelle_ohne_archiv": ("Quelle ohne Archivkopie (archive.org aus: ohne gesicherte eigene Kopie)", HINWEIS),
     "verdacht_ohne_anhoerung": ("Verdacht gegen eine Person ohne Anhörung", HINWEIS),
     "verdacht_zu_duenn": ("Verdacht mit weniger als zwei unabhängigen Quellen", HINWEIS),
     "ohne_start": ("Faden ohne Startdatum", HINWEIS),

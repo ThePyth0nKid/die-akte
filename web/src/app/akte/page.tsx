@@ -4,8 +4,10 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Download, Plus } from "lucide-react"
+import ErstesKontoHinweis, { useEinrichtungOffen } from "@/components/akte/ErstesKonto"
 import KontoKnopf from "@/components/akte/KontoKnopf"
 import { akte, AkteFehler } from "@/lib/akte/api"
+import { istRedaktionOhneWand, sitzungLaeuft } from "@/lib/akte/rolle"
 import type { Board } from "@/lib/akte/typen"
 
 export default function AkteStart() {
@@ -13,9 +15,14 @@ export default function AkteStart() {
   const [fehler, setFehler] = useState("")
   const [titel, setTitel] = useState("")
   const [laeuft, setLaeuft] = useState(false)
+  // Ohne Wand weiß die Board-Liste nichts über die Rolle; dann fragt rolle.ts nach (null = noch offen).
+  const [redaktionOhneWand, setRedaktionOhneWand] = useState<boolean | null>(null)
   // Mitglieder bekommen nur freigeschaltete Boards mit darf_bearbeiten = false.
-  const redaktion = boards?.some((b) => b.darf_bearbeiten) ?? false
+  const redaktion = (boards?.some((b) => b.darf_bearbeiten) ?? false) || redaktionOhneWand === true
+  const leerGeklaert = boards?.length === 0 && redaktionOhneWand !== null
   const router = useRouter()
+  // Noch kein Konto in der Akte: statt „Hier ist noch nichts freigeschaltet“ der Weg zum ersten Konto.
+  const einrichtungOffen = useEinrichtungOffen()
 
   // Lesende (Mitglieder, Besucher ohne Konto) landen direkt auf der Hauptwand, wenn es genau eine gibt:
   // So reicht ein kurzer Link auf /akte.
@@ -35,6 +42,11 @@ export default function AkteStart() {
         : "Die Boards konnten nicht geladen werden.")
     })
   }, [])
+
+  useEffect(() => {
+    if (boards?.length !== 0) return
+    istRedaktionOhneWand(sitzungLaeuft, akte.einstellungen).then(setRedaktionOhneWand)
+  }, [boards])
 
   async function anlegen(e: React.FormEvent) {
     e.preventDefault()
@@ -96,8 +108,14 @@ export default function AkteStart() {
       </form>
       )}
 
-      {boards === null && !fehler && <p className="text-[#8A94A0]">Lädt …</p>}
-      {boards?.length === 0 && (
+      {(boards === null || (boards.length === 0 && redaktionOhneWand === null)) && !fehler && (
+        <p className="text-[#8A94A0]">Lädt …</p>
+      )}
+      {leerGeklaert && einrichtungOffen && <ErstesKontoHinweis />}
+      {leerGeklaert && redaktion && (
+        <p className="text-[#8A94A0]">Noch keine Wand. Leg oben die erste an, oder bitte deinen Agenten darum.</p>
+      )}
+      {leerGeklaert && !redaktion && !einrichtungOffen && (
         <p className="text-[#8A94A0]">
           Hier ist noch nichts freigeschaltet.{" "}
           <Link href="/login?redirect=%2Fakte" className="underline">Anmelden</Link>

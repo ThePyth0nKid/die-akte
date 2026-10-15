@@ -1,4 +1,5 @@
-# Die Akte lokal: docker compose up -d --build  →  http://localhost:8080
+# Die Akte lokal: docker compose up -d --build --wait  →  http://localhost:8080
+# Einfacher: start\START-AKTE.cmd (Windows) bzw. bash start/akte.sh (macOS, Linux).
 # Läuft nur auf deinem Rechner (Port an 127.0.0.1 gebunden). Daten im Volume "akte-daten".
 name: die-akte
 
@@ -11,9 +12,20 @@ services:
     environment:
       AKTE_DATEN: /daten
       AKTE_VERTRAUTE_PROXYS: "1"
-      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,api
+      # Namen, unter denen Django antwortet: "api" (für die Oberfläche im Container) immer, dazu der Wert aus .env
+      # (Standard: nur dieser Rechner). Eigene Domain, IP-Adresse oder Rechnername: in .env setzen, wie AKTE_HOSTS.
+      DJANGO_ALLOWED_HOSTS: "api,${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1]}"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:${AKTE_PORT:-8080},http://127.0.0.1:${AKTE_PORT:-8080}}"
     volumes:
       - akte-daten:/daten
+    # Gesund, sobald Gunicorn antwortet; start.sh hat die Datenbank dann schon auf Stand gebracht. Fragt eine
+    # statische Datei ab (keine Datenbank, keine Drossel, kein Protokolleintrag). Damit wartet "up --wait".
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client as h, sys; c = h.HTTPConnection('127.0.0.1', 8000, timeout=4); c.request('GET', '/static/admin/css/base.css'); sys.exit(c.getresponse().status >= 500)"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 120s
     restart: unless-stopped
 
   web:
@@ -25,12 +37,23 @@ services:
       AKTE_TITEL: ${AKTE_TITEL:-Die Akte}
     depends_on:
       - api
+    # Gesund, sobald Next.js antwortet ("/" leitet auf /akte weiter, braucht dafür die API nicht).
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/', {redirect: 'manual'}).then(r => process.exit(r.status < 500 ? 0 : 1), () => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 60s
     restart: unless-stopped
 
   proxy:
     image: caddy:2.10-alpine
     ports:
       - "127.0.0.1:${AKTE_PORT:-8080}:8080"
+    environment:
+      # Namen, unter denen die Akte antwortet (Host-Kopf, durch Leerzeichen getrennt); alles andere bekommt 421.
+      # Eigene Domain: in .env AKTE_HOSTS="akte.example.org localhost 127.0.0.1 ::1 [::1]".
+      AKTE_HOSTS: "${AKTE_HOSTS:-localhost 127.0.0.1 ::1 [::1]}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:

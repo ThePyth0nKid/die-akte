@@ -39,7 +39,10 @@ interface Props {
 }
 
 export default function QuellenVorschau({ quelle: start, zitat, anDieWand, zeigen, kompakt, nurLesen }: Props) {
-  const [q, setQ] = useState(start)
+  // Selbst nachgeladen gilt nur, solange von außen nichts Neueres kommt: Bringt die Live-Aktualisierung eine frische
+  // Quelle (etwa mit der fertigen Sicherung aus dem Hintergrund), zeigt die Vorschau diese.
+  const [nachgeladen, setNachgeladen] = useState<{ von: Quelle; neu: Quelle } | null>(null)
+  const q = nachgeladen && nachgeladen.von === start ? nachgeladen.neu : start
   const [laeuft, setLaeuft] = useState(false)
   const [kopiert, setKopiert] = useState(false)
   const da = useRef(true)
@@ -54,7 +57,7 @@ export default function QuellenVorschau({ quelle: start, zitat, anDieWand, zeige
       // Die Sicherung läuft im Hintergrund; nach kurzer Zeit nachsehen.
       await new Promise((fertig) => setTimeout(fertig, 8000))
       const neu = await akte.quelle(q.id)
-      if (da.current) setQ(neu)
+      if (da.current) setNachgeladen({ von: start, neu })
     } catch {
       // Stand bleibt wie er war; der Knopf wird wieder frei.
     } finally {
@@ -88,7 +91,11 @@ export default function QuellenVorschau({ quelle: start, zitat, anDieWand, zeige
 
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {!nurLesen && stand.length === 0 && q.url && (
-            <span className="rounded bg-[#FFB300]/15 px-1.5 py-0.5 text-[11px] text-[#FFB300]">noch nicht gesichert</span>
+            // Kein Fehler: Die Sicherung läuft im Hintergrund und hat keinen eigenen Zwischenstand.
+            <span className="rounded bg-white/5 px-1.5 py-0.5 text-[11px] text-[#8A94A0]"
+              title="Die Akte sichert die Quelle im Hintergrund. Das Ergebnis erscheint von selbst.">
+              noch keine eigene Kopie
+            </span>
           )}
           {stand.map((s) => (
             <span

@@ -157,6 +157,12 @@ export interface Board {
   eltern?: string[]
 }
 
+/** Einstellungen der ganzen Akte (GET/PATCH /akte/einstellungen/, nur Redaktion). */
+export interface Einstellungen {
+  /** Quellen zusätzlich öffentlich bei archive.org sichern (Standard: aus). */
+  archiv_org: boolean
+}
+
 export interface BoardVerweis {
   slug: string
   titel: string

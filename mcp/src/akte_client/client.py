@@ -8,25 +8,65 @@ Entwürfe an und ändert Entwürfe; freigeben kann er nicht (das bleibt dem Mens
 
 from __future__ import annotations
 
+import ipaddress
+import sys
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 
 ZEITLIMIT = 60
+#: Die Zitatprüfung antwortet auf dem Server nach höchstens 30 s; der Client wartet etwas länger, nicht 60 s.
+ZEITLIMIT_PRUEFEN = 45
 
 
 class AkteFehler(Exception):
     """Antwort mit Status ≥ 400. ``daten`` ist die JSON-Antwort oder der Anfang des Textes."""
 
-    def __init__(self, status: int, daten: Any, methode: str = "", pfad: str = ""):
+    def __init__(self, status: int, daten: Any, methode: str = "", pfad: str = "", text: str | None = None):
         self.status = status
         self.daten = daten
-        super().__init__(f"Fehler {status} bei {methode} {pfad}: {daten}")
+        super().__init__(text or f"Fehler {status} bei {methode} {pfad}: {daten}")
+
+
+class AkteNichtErreichbar(AkteFehler):
+    """Keine (brauchbare) Antwort von der Akte: läuft nicht, falsche Adresse, Zeitüberschreitung. ``status`` ist 0."""
+
+    def __init__(self, text: str):
+        super().__init__(0, text, text=text)
+
+
+def _sicherer_weg(basis: str) -> bool:
+    """https, oder eine Adresse auf diesem Rechner (dann verlässt der Token den Rechner nicht)."""
+    teile = urlsplit(basis)
+    if teile.scheme == "https":
+        return True
+    host = (teile.hostname or "").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+_gewarnt: set[str] = set()
+
+
+def _warnen_unsicher(basis: str) -> None:
+    """E5: Ein Token über unverschlüsseltes HTTP zu einem anderen Rechner kann im Netz mitgelesen werden. Nur warnen
+    (auf stderr, stdout gehört beim MCP-Server dem Protokoll), nicht abbrechen: Installationen im eigenen LAN laufen
+    weiter."""
+    if basis in _gewarnt:
+        return
+    _gewarnt.add(basis)
+    print(f"Warnung: AKTE_TOKEN geht unverschlüsselt an {basis}. Im Netz kann ihn jemand mitlesen. Besser https "
+          "oder die Akte auf diesem Rechner (localhost).", file=sys.stderr)
 
 
 class Akte:
     def __init__(self, basis: str, token: str | None = None, *, session: requests.Session | None = None,
-                 kennung: str = "akte-client/0.1"):
+                 kennung: str = "akte-client/0.2"):
         if not basis:
             raise ValueError("Adresse der Akte fehlt (z. B. http://localhost:8080).")
         self.wurzel = basis.rstrip("/")
@@ -34,12 +74,26 @@ class Akte:
         self.s = session or requests.Session()
         self.s.headers["User-Agent"] = kennung
         self.mit_token = bool(token)
+        #: Token über unverschlüsseltes HTTP zu einem anderen Rechner (E5); der MCP-Server sagt es auch dem Modell.
+        self.unsicher = bool(token) and not _sicherer_weg(self.wurzel)
         if token:
             self.s.headers["Authorization"] = f"Token {token}"
+            if self.unsicher:
+                _warnen_unsicher(self.wurzel)
 
     # ─── Grundlagen ────────────────────────────────────────────────────────
-    def anfrage(self, methode: str, pfad: str, **kw) -> Any:
-        r = self.s.request(methode, f"{self.basis}{pfad}", timeout=ZEITLIMIT, **kw)
+    def anfrage(self, methode: str, pfad: str, *, zeitlimit: float = ZEITLIMIT, **kw) -> Any:
+        try:
+            r = self.s.request(methode, f"{self.basis}{pfad}", timeout=zeitlimit, **kw)
+        except requests.ConnectionError:  # auch: Verbindungsaufbau dauert zu lange (ConnectTimeout)
+            raise AkteNichtErreichbar(f"Die Akte ist nicht erreichbar ({self.wurzel}). Läuft sie? "
+                                      "Start: START-AKTE") from None
+        except requests.Timeout:
+            raise AkteNichtErreichbar(f"Die Akte ({self.wurzel}) hat nicht innerhalb von {zeitlimit:.0f} s "
+                                      "geantwortet. Kurz warten und noch einmal versuchen.") from None
+        except requests.RequestException as fehler:  # Auffangnetz: ungültige Adresse, abgebrochene Antwort …
+            raise AkteNichtErreichbar(f"Die Verbindung zur Akte ({self.wurzel}) ist gescheitert "
+                                      f"({type(fehler).__name__}). Stimmt AKTE_BASIS?") from None
         if r.status_code >= 400:
             try:
                 daten = r.json()
@@ -89,6 +143,10 @@ class Akte:
     def sicherungen(self, quelle_id: int) -> list[dict]:
         return self.get(f"/quellen/{quelle_id}/sicherungen/")
 
+    def zitat_pruefen(self, beleg_id: int) -> dict:
+        """Steht das Zitat des Belegs in seiner Quelle? Synchron, höchstens 30 s auf dem Server."""
+        return self.anfrage("POST", f"/belege/{int(beleg_id)}/pruefen/", zeitlimit=ZEITLIMIT_PRUEFEN)
+
     # ─── Schreiben (Entwürfe) ──────────────────────────────────────────────
     def entitaet(self, name: str, typ: str | None = None, kurz: str = "", oeffentlich: bool = False,
                  notiz: str = "") -> tuple[dict, bool]:
@@ -103,7 +161,8 @@ class Akte:
 
     def quelle(self, titel: str, url: str = "", herausgeber: str = "", guete: str = "sekundaer",
                abgerufen: str | None = None, veroeffentlicht: str | None = None) -> tuple[dict, bool]:
-        """Quelle holen (gleiche URL) oder anlegen; das Anlegen stößt die Beweissicherung an."""
+        """Quelle holen (gleiche URL) oder anlegen; das Anlegen stößt die Beweissicherung im Hintergrund an (die
+        Antwort wartet nicht darauf)."""
         if url:
             for q in self.get("/quellen/", params={"q": url}):
                 if q["url"] == url:

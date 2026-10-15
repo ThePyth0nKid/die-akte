@@ -3,14 +3,16 @@
 // Einen Faden anlegen oder ändern — mit Zeitraum, Aussageart und Belegen.
 // Die Prüfung im Backend sagt nach dem Speichern, was vor der Veröffentlichung fehlt.
 
-import { begruendungsFrage, freigebenMitUnterschrift, zusammenfassung } from "@/lib/akte/unterschrift"
-import { useEffect, useState } from "react"
+import { freigebenMitUnterschrift } from "@/lib/akte/unterschrift"
+import { useEffect, useRef, useState } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { akte } from "@/lib/akte/api"
 import {
   AUSSAGE_NAMEN, VERBINDUNG_NAMEN,
   type Aussageart, type Beleg, type EntitaetKurz, type Quelle, type Status, type Verbindung, type VerbindungTyp,
 } from "@/lib/akte/typen"
+import { useEigeneAnfrage } from "./EigeneAnfrage"
+import { useUnterschrift } from "./UnterschriftDialog"
 
 interface Props {
   von: EntitaetKurz
@@ -50,6 +52,13 @@ export default function FadenFormular({ von, nach, vorhanden, fertig, board }: P
   const [neu, setNeu] = useState<NeueQuelle | null>(null)
   const [fehler, setFehler] = useState("")
   const [laeuft, setLaeuft] = useState(false)
+  // Unterschreiben fragt in einem eigenen Dialog nach (Klartext statt window.confirm mit Rohfeldern).
+  const unterschrift = useUnterschrift()
+  // Speichern, Hochladen und Unterschreiben melden sich bei der Wand an: Die Live-Aktualisierung wartet so lange.
+  const eigene = useEigeneAnfrage()
+  // Fokus im Formular: Sonst schließt Esc es nicht (die Taste kommt nur an, wenn der Fokus drin ist).
+  const formular = useRef<HTMLFormElement>(null)
+  useEffect(() => { formular.current?.focus() }, [])
 
   useEffect(() => {
     if (!suche.trim()) return
@@ -61,13 +70,15 @@ export default function FadenFormular({ von, nach, vorhanden, fertig, board }: P
   const setze = <K extends keyof typeof v>(k: K, w: (typeof v)[K]) => setV((alt) => ({ ...alt, [k]: w }))
 
   async function dateienAnhaengen(dateien: File[]) {
-    for (const datei of dateien) {
-      try {
-        belegDazu(await akte.quelleAusDatei(datei))
-      } catch {
-        setFehler("Nur PDF oder Bild, höchstens 15 MB.")
+    await eigene(async () => {
+      for (const datei of dateien) {
+        try {
+          belegDazu(await akte.quelleAusDatei(datei))
+        } catch {
+          setFehler("Nur PDF oder Bild, höchstens 15 MB.")
+        }
       }
-    }
+    })
   }
 
   function belegDazu(q: Quelle) {
@@ -79,7 +90,7 @@ export default function FadenFormular({ von, nach, vorhanden, fertig, board }: P
   async function neueQuelleSpeichern() {
     if (!neu?.titel.trim()) return
     try {
-      const q = await akte.quelleAnlegen({ ...neu, abgerufen_am: neu.abgerufen_am || null })
+      const q = await eigene(() => akte.quelleAnlegen({ ...neu, abgerufen_am: neu.abgerufen_am || null }))
       belegDazu(q)
       setNeu(null)
     } catch (err) {
@@ -106,18 +117,18 @@ export default function FadenFormular({ von, nach, vorhanden, fertig, board }: P
     const freigeben = v.status === "freigegeben" && vorhanden?.status !== "freigegeben"
     if (freigeben) daten.status = (vorhanden?.status ?? "entwurf") as Status
     try {
-      let ergebnis = vorhanden ? await akte.fadenAendern(vorhanden.id, daten) : await akte.fadenAnlegen(daten)
-      if (freigeben) {
-        const ok = await freigebenMitUnterschrift("faden", ergebnis.id, {
-          begruendung: (b) => window.prompt(begruendungsFrage(b)),
-          bestaetigen: (vb) => window.confirm(zusammenfassung(vb)),
-        }, board)
-        if (!ok) {
-          setFehler("Freigabe abgebrochen. Der Faden ist gespeichert und bleibt Entwurf.")
-          setLaeuft(false)
-          return
-        }
-        ergebnis = { ...ergebnis, status: "freigegeben" as Status }
+      // Speichern und Unterschreiben als eine eigene Anfrage (auch während der Mensch den Dialog liest).
+      const ergebnis = await eigene(async () => {
+        const gespeichert = vorhanden ? await akte.fadenAendern(vorhanden.id, daten) : await akte.fadenAnlegen(daten)
+        if (!freigeben) return gespeichert
+        const ok = await freigebenMitUnterschrift("faden", gespeichert.id, unterschrift.fragen("faden"), board)
+        return ok ? { ...gespeichert, status: "freigegeben" as Status } : null
+      })
+      if (!ergebnis) {
+        setFehler("Freigabe abgebrochen. Der Faden ist gespeichert und bleibt Entwurf.")
+        setLaeuft(false)
+        requestAnimationFrame(() => formular.current?.focus())
+        return
       }
       fertig(ergebnis)
     } catch (err) {
@@ -134,13 +145,15 @@ export default function FadenFormular({ von, nach, vorhanden, fertig, board }: P
       aria-modal="true"
       aria-label="Faden bearbeiten"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={() => fertig(null)}
-      onKeyDown={(e) => { if (e.key === "Escape") fertig(null) }}
+      onMouseDown={() => { if (!laeuft) fertig(null) }}
+      onKeyDown={(e) => { if (e.key === "Escape" && !laeuft) fertig(null) }}
     >
       <form
+        ref={formular}
+        tabIndex={-1}
         onSubmit={speichern}
         onMouseDown={(e) => e.stopPropagation()}
-        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-[#222636] bg-[#101117] p-6 shadow-2xl"
+        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-[#222636] bg-[#101117] p-6 shadow-2xl outline-none"
         aria-label="Faden"
       >
         <div className="mb-5 flex items-start justify-between gap-4">
@@ -302,7 +315,7 @@ export default function FadenFormular({ von, nach, vorhanden, fertig, board }: P
             </select>
           </label>
           <button type="submit" disabled={laeuft} className="min-h-11 cursor-pointer rounded bg-[#FF1744] px-6 font-semibold text-white disabled:opacity-40">
-            {laeuft ? "Speichert …" : "Faden speichern"}
+            {laeuft ? "Speichert …" : v.status === "freigegeben" && vorhanden?.status !== "freigegeben" ? "Speichern und unterschreiben" : "Faden speichern"}
           </button>
         </div>
         {fehler && <p role="alert" className="mt-3 text-sm text-[#FF1744]">{fehler}</p>}
@@ -313,6 +326,7 @@ export default function FadenFormular({ von, nach, vorhanden, fertig, board }: P
           </ul>
         )}
       </form>
+      {unterschrift.dialog}
     </div>
   )
 }

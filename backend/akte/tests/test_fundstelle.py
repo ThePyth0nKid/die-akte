@@ -319,6 +319,19 @@ class FundstelleTest(_Speicher):
         s = Sicherung.objects.get(art="fundstelle")
         self.assertEqual((s.status, s.beleg_id, s.mime), ("fertig", beleg.id, "image/jpeg"))
 
+    @override_settings(AKTE_BROWSER_AKTIV=False, AKTE_SICHERUNG_AKTIV=True)
+    def test_pdf_fundstelle_auch_wenn_der_beleg_vor_dem_original_kam(self):
+        # Seit 0.2 sichert die Akte im Hintergrund: Der Faden steht oft schon, bevor das Original geladen ist.
+        from akte.abruf import Abruf
+        from akte.sicherung import original_sichern
+
+        q = Quelle.objects.create(titel="Drucksache", url="https://x.example/drs.pdf")
+        beleg = self._beleg(q)
+        with mock.patch("akte.sicherung.abrufen", return_value=Abruf(q.url, 200, "", pdf_mit_text(ZITAT))), \
+                self.captureOnCommitCallbacks(execute=True):
+            original_sichern(q)
+        self.assertTrue(Sicherung.objects.filter(art="fundstelle", status="fertig", beleg=beleg).exists())
+
     def test_webseite_geht_an_den_browser(self):
         q = Quelle.objects.create(titel="Seite", url="https://x.example/")
         self.assertEqual(fundstelle_jetzt(self._beleg(q)), "browser")

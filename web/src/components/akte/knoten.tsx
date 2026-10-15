@@ -11,6 +11,7 @@ import { bildArt, passendeGroesse } from "@/lib/akte/ordnung"
 import { TYP_NAMEN, type BoardVerweis, type EntitaetKurz, type Quelle, type Zettel } from "@/lib/akte/typen"
 import { MappeKnoten } from "./MappeKnoten"
 import { datum, kopieVon } from "./QuellenVorschau"
+import Siegel from "./Siegel"
 
 /** Alle Fäden hängen an derselben Nadel oben auf der Karte. */
 function Nadel({ farbe = FARBEN.rot }: { farbe?: string }) {
@@ -39,6 +40,8 @@ export type KarteDaten = {
   /** Portale: andere Wände, auf denen dieselbe Karte liegt („auch in …“). */
   auchIn?: BoardVerweis[]
   springen?: (slug: string) => void
+  /** Gerade live auf die Wand gekommen: kurz hervorheben. */
+  neu?: boolean
 }
 export type KarteKnotenTyp = Node<KarteDaten, "karte">
 
@@ -61,12 +64,12 @@ export const KarteKnoten = memo(function KarteKnoten({ data, selected }: NodePro
   const bildUrl = platzhalter ? "" : e.bild_url
   return (
     <div
-      className="relative w-[220px] transition-opacity duration-300"
+      className={`relative w-[220px] transition-opacity duration-300${data.neu ? " akte-neu" : ""}`}
       style={{ opacity: data.deckkraft ?? (data.gedimmt ? 0.12 : 1) }}
     >
       <Nadel />
       <div
-        className="rounded-[3px] p-3 pb-4 shadow-[0_10px_24px_rgba(0,0,0,0.55)]"
+        className="akte-karte-blatt rounded-[3px] p-3 pb-4 shadow-[0_10px_24px_rgba(0,0,0,0.55)]"
         style={{
           background: data.papier ? "#fbf8f1" : "#15161d",
           color: data.papier ? FARBEN.tinteDunkel : FARBEN.tinte,
@@ -149,9 +152,21 @@ export const KarteKnoten = memo(function KarteKnoten({ data, selected }: NodePro
           ))}
         </div>
       )}
+      {data.neu && !data.aufnahme && (
+        <span className="akte-neu-stempel pointer-events-none absolute -bottom-3 left-3 z-10 rotate-[-4deg] border-2 border-[#FFD54F] bg-[#0A0A0F] px-1.5 py-0.5 font-[family-name:var(--font-akte-mono)] text-[10px] font-semibold uppercase tracking-[0.25em] text-[#FFD54F]">
+          Neu
+        </span>
+      )}
+      {/* Siegel: Ein Mensch hat die Karte mit seinem Schlüssel freigegeben. Nicht in Aufnahme und Render (das Bild
+          bleibt wie bisher) und nicht für Leser (die sehen ohnehin nur Unterschriebenes). */}
+      {!data.aufnahme && !data.nurLesen && e.status === "freigegeben" && (
+        <span className="absolute -left-3 -top-3 z-10 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.6)]" title="Unterschrieben: ein Mensch hat diese Karte freigegeben">
+          <Siegel groesse={28} titel="Unterschrieben" />
+        </span>
+      )}
       {!data.aufnahme && !data.nurLesen && (data.befunde > 0 || e.status !== "freigegeben") && (
         <span
-          title={e.status !== "freigegeben" ? "Karte nicht freigegeben" : `${data.befunde} Faden-Befunde`}
+          title={e.status !== "freigegeben" ? "Entwurf: Karte noch nicht unterschrieben" : `${data.befunde} Faden-Befunde`}
           className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full bg-[#FFB300] px-1 text-[11px] font-bold text-black"
         >
           <AlertTriangle className="h-3 w-3" aria-hidden />

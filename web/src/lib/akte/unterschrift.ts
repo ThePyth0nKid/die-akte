@@ -166,8 +166,9 @@ export async function freigebenMitUnterschrift(
   objekt: "karte" | "faden",
   id: number,
   frage: {
-    begruendung: (befund: FehlendeBegruendung) => string | null
-    bestaetigen: (v: Vorbereitung) => boolean
+    // Rückfragen dürfen asynchron sein (eigener Dialog statt window.prompt/confirm); an den Bytes ändert das nichts.
+    begruendung: (befund: FehlendeBegruendung) => string | null | Promise<string | null>
+    bestaetigen: (v: Vorbereitung) => boolean | Promise<boolean>
   },
   board?: string,
 ): Promise<boolean> {
@@ -184,14 +185,14 @@ export async function freigebenMitUnterschrift(
         : []
       if (!fehlend.length) throw e
       for (const b of fehlend) {
-        const grund = frage.begruendung(b)
+        const grund = await frage.begruendung(b)
         if (!grund || !grund.trim()) return false
         ueberstimmungen[b.code] = grund.trim()
       }
       continue
     }
     if (bestaetigterStand(v) !== bestaetigt) {
-      if (!frage.bestaetigen(v)) return false
+      if (!(await frage.bestaetigen(v))) return false
       bestaetigt = bestaetigterStand(v)
     }
     try {

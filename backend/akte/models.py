@@ -182,9 +182,24 @@ class BoardLook(models.TextChoices):
     PAPIER = "papier", "Papier / Kork"
 
 
+#: Kennungen, die die Oberfläche selbst belegt (`/akte/einrichten`); eine Wand darunter wäre nicht erreichbar.
+BOARD_SLUGS_RESERVIERT = frozenset({"einrichten"})
+
+
+def slug_reserviert(slug: str) -> bool:
+    """Belegt die Oberfläche diese Kennung? Ohne Rücksicht auf Groß/Klein („Einrichten“ zählt mit)."""
+    return str(slug or "").strip().lower() in BOARD_SLUGS_RESERVIERT
+
+
+def board_slug_frei(wert: str) -> None:
+    """Validator am Feld: greift auch in der Django-Verwaltung und bei ``full_clean``."""
+    if slug_reserviert(wert):
+        raise ValidationError("Diese Kennung braucht die Oberfläche selbst.")
+
+
 class Board(Zeitstempel):
     titel = models.CharField(max_length=200)
-    slug = models.SlugField(max_length=220, unique=True)
+    slug = models.SlugField(max_length=220, unique=True, validators=[board_slug_frei])
     beschreibung = models.TextField(blank=True)
     look = models.CharField(max_length=20, choices=BoardLook.choices, default=BoardLook.DUNKEL)
     #: Nur ein Wunsch. Ob etwas öffentlich erscheint, entscheidet zusätzlich
@@ -378,6 +393,38 @@ class Sicherung(models.Model):
         ordering = ["-erstellt_am", "-id"]
         verbose_name_plural = "Sicherungen"
         indexes = [models.Index(fields=["quelle", "art"])]
+
+
+class Einstellungen(models.Model):
+    """Einstellungen für die ganze Akte: genau eine Zeile (pk=1), geändert nur von einem Menschen.
+
+    ``archiv_org``: Quellen zusätzlich öffentlich bei archive.org sichern. ``None`` = noch nicht entschieden, dann
+    gilt ``settings.AKTE_ARCHIV_AKTIV`` (Standard aus). Lesen über ``akte/einstellungen.py``.
+    """
+
+    archiv_org = models.BooleanField(null=True, blank=True)
+    geaendert_am = models.DateTimeField(auto_now=True)
+    geaendert_von = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                      related_name="+")
+
+    class Meta:
+        verbose_name = "Einstellungen der Akte"
+        verbose_name_plural = "Einstellungen der Akte"
+        constraints = [models.CheckConstraint(condition=models.Q(pk=1), name="einstellungen_nur_eine_zeile")]
+
+
+class Zaehler(models.Model):
+    """Zähler mit festem Zeitfenster (Fehlversuche bei Anmeldung und Einrichtung, ``akte/zaehler.py``).
+
+    In der Datenbank statt im Cache: Hochzählen ist atomar (``F()``), und das Ende des Fensters bleibt beim
+    Hochzählen erhalten (der Datenbank-Cache von Django setzte es bei jedem ``incr`` neu)."""
+
+    schluessel = models.CharField(max_length=100, unique=True)
+    anzahl = models.PositiveIntegerField(default=0)
+    ablauf = models.DateTimeField(db_index=True)
+
+    class Meta:
+        verbose_name_plural = "Zähler"
 
 
 class BoardBeweis(models.Model):

@@ -19,6 +19,10 @@ describe("middleware", () => {
     expect(AKTE_OFFEN.test("/akte/demo-musterhafen")).toBe(true)
     expect(anfrage("/akte/demo").headers.get("location")).toBeNull()
   })
+  it("lässt die Einrichtung des ersten Kontos ohne Konto durch", () => {
+    expect(anfrage("/akte/einrichten").headers.get("location")).toBeNull()
+    expect(anfrage("/api/auth/einrichtung").headers.get("location")).toBeNull()
+  })
   it("schickt die Aufnahme ohne Konto zum Login", () => {
     const antwort = anfrage("/akte/demo/render")
     expect(antwort.headers.get("location")).toContain("/login?redirect=%2Fakte%2Fdemo%2Frender")

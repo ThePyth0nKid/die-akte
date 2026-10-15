@@ -287,6 +287,7 @@ class SpeicherUndArchivTest(TestCase):
                 speicher.lesen(schl)
             self.assertEqual([p.name for p in (Path(ordner) / "beweise").iterdir()], [schl.split("/")[1]])
 
+    @override_settings(AKTE_ARCHIV_AKTIV=True)  # seit 0.2 von Haus aus aus; hier: eingeschaltet, trotzdem geschützt
     def test_archive_org_bekommt_keine_zugangsdaten_und_laesst_sich_abschalten(self):
         from akte.sicherung import archive_org_sichern
 
@@ -301,6 +302,7 @@ class SpeicherUndArchivTest(TestCase):
             self.assertIsNone(archive_org_sichern(Quelle.objects.create(titel="X", url="https://x.beispiel.test/")))
         self.assertFalse(Sicherung.objects.filter(quelle__titel="X").exists())
 
+    @override_settings(AKTE_ARCHIV_AKTIV=True)
     def test_archive_org_bekommt_nichts_aus_dem_eigenen_netz(self):
         from akte.sicherung import archive_org_sichern
 

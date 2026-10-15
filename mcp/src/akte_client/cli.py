@@ -102,7 +102,7 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--abgerufen"); p.add_argument("--veroeffentlicht")
     p = sub.add_parser("faden")
     p.add_argument("von"); p.add_argument("nach"); p.add_argument("--typ", default="sonstiges")
-    p.add_argument("--text", default=""); p.add_argument("--start"); p.add_argument("--ende")
+    p.add_argument("--text", default=""); p.add_argument("--start"); p.add_argument("--ende", "--bis", dest="ende")
     p.add_argument("--aktuell", action="store_true")
     p.add_argument("--art", choices=["belegt", "verdacht", "meinung"], default="belegt")
     p.add_argument("--quelle", type=int, action="append", default=[])
@@ -116,11 +116,14 @@ def _parser() -> argparse.ArgumentParser:
     p = sub.add_parser("pruefung"); p.add_argument("board")
     p = sub.add_parser("fahrt"); p.add_argument("board"); p.add_argument("datei")
     p = sub.add_parser("weg"); p.add_argument("von"); p.add_argument("nach"); p.add_argument("--nur-belegt", action="store_true")
-    p = sub.add_parser("sichern", help="Quelle(n) sichern: Original, Archivkopie, Fundstellen")
+    p = sub.add_parser("sichern", help="Quelle(n) im Hintergrund sichern: Original, Fundstellen (archive.org nur, "
+                                       "wenn eingeschaltet)")
     p.add_argument("quelle", nargs="?", type=int); p.add_argument("--alle", action="store_true")
-    p = sub.add_parser("zitat-pruefen", help="Steht das Zitat eines Belegs wörtlich an der Quelle?")
-    p.add_argument("beleg", type=int); p.add_argument("--quelle", type=int, required=True)
-    p.add_argument("--warten", type=int, default=60)
+    p = sub.add_parser("zitat-pruefen", help="Steht das Zitat eines Belegs wörtlich an der Quelle? (höchstens 30 s)")
+    p.add_argument("beleg", type=int)
+    # Seit 0.2 ergibt sich die Quelle aus dem Beleg, und es wird nicht mehr gewartet; beides bleibt für alte Aufrufe.
+    p.add_argument("--quelle", type=int, help=argparse.SUPPRESS)
+    p.add_argument("--warten", type=int, help=argparse.SUPPRESS)
     p = sub.add_parser("anhang", help="Datei an eine Quelle hängen oder als neue Quelle anlegen")
     p.add_argument("datei"); p.add_argument("--quelle", type=int); p.add_argument("--titel", default="")
     p.add_argument("--board"); p.add_argument("--herausgeber", default="")
@@ -269,7 +272,7 @@ def _ausfuehren(a: argparse.Namespace) -> int:
             akte.post(f"/quellen/{i}/sichern/")
         print(f"Sicherung für {len(ids)} Quelle(n) angestoßen.")
     elif a.befehl == "zitat-pruefen":
-        zeige(aktionen.zitat_pruefen(akte, a.beleg, a.quelle, a.warten))
+        zeige(aktionen.zitat_pruefen(akte, a.beleg))
     elif a.befehl == "anhang":
         pfad = Path(a.datei)
         dateien = {"datei": (pfad.name, pfad.read_bytes())}

@@ -14,6 +14,7 @@ from rest_framework.test import APIClient
 
 from akte import abruf
 from akte.abruf import AbrufFehler, erkenne, oeffentlich, pruefe_url
+from akte.einstellungen import archiv_org_setzen
 from akte.models import Board, BoardBeweis, Quelle, Sicherung
 from akte.permissions import REDAKTION_GRUPPE
 from akte.sicherung import anhang_speichern, lies_meta, quelle_sichern_jetzt
@@ -81,10 +82,15 @@ class _MitSpeicher(TestCase):
 
 
 class SicherungTest(_MitSpeicher):
+    def setUp(self):
+        super().setUp()
+        # archive.org ist seit 0.2 von Haus aus aus; diese Tests prüfen den Weg mit eingeschaltetem archive.org.
+        archiv_org_setzen(True)
+
     def test_seite_mit_vorschau_und_archive_org(self):
         q = Quelle.objects.create(titel="Artikel", url="https://www.tagesschau.de/a")
 
-        def holen(url, max_bytes=None):
+        def holen(url, max_bytes=None, frist=None):
             return abruf.Abruf(url, 200, "", PNG if url.endswith(".png") else HTML)
 
         archiv = mock.Mock(status_code=200, url="https://web.archive.org/web/20260924/https://www.tagesschau.de/a", headers={})

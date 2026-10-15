@@ -143,7 +143,9 @@ class Command(BaseCommand):
                 raise CommandError(f"{antwort.request['PATH_INFO']}: {antwort.status_code} {antwort.content[:300]!r}")
             return antwort.json() if antwort.content else None
 
-        with override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=False):
+        # Gleich hier sichern (nicht im Hintergrund-Thread): der Befehl endet sonst, bevor die Fundstellen da sind.
+        with override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=False,
+                               AKTE_HINTERGRUND="sofort"):
             ok(api.post(f"{A}/boards/", {"titel": "Freie Stadt Musterhafen (Demo)", "slug": SLUG, "beschreibung":
                        "Erfundenes Beispiel: Wer wertet die Daten der Stadt aus? Alle Namen sind ausgedacht."},
                         format="json"))

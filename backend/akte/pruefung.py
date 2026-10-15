@@ -78,13 +78,35 @@ def sperrende(befunde: list[Befund]) -> list[Befund]:
     return [b for b in befunde if b.schwere == SPERRT and not b.ueberstimmt]
 
 
+def _eigene_kopie_gesichert(q) -> bool:
+    """Liegt eine fertige eigene Kopie mit Prüfsumme vor (Original oder Anhang)? Nutzt die Vorabfrage aus
+    ``faeden_qs`` (``belege__quelle__sicherungen``), keine Abfrage je Faden."""
+    return any(s.status == "fertig" and s.art in ("original", "anhang") and s.sha256 for s in q.sicherungen.all())
+
+
+def _ohne_archiv(q) -> Befund | None:
+    """Regel „quelle_ohne_archiv“ für eine Quelle mit Link ohne archive.org-Kopie.
+
+    Ist archive.org eingeschaltet, zählt nur die Archivkopie. Ist es aus (Standard seit 0.2, eine Entscheidung der
+    Redaktion), gilt eine Quelle mit gesicherter eigener Kopie als gesichert: kein Befund. Ohne eigene Kopie bleibt
+    der Hinweis, mit dem Grund in Klartext."""
+    from .einstellungen import archiv_org_aktiv
+
+    if archiv_org_aktiv():
+        return Befund("quelle_ohne_archiv", f"Quelle „{q.titel}“ ohne Archivkopie.")
+    if _eigene_kopie_gesichert(q):
+        return None
+    return Befund("quelle_ohne_archiv",
+                  f"Quelle „{q.titel}“: Keine gesicherte Kopie der Quelle – Sicherung erneut anstoßen.")
+
+
 def _roh_befunde(v: Verbindung, ohne_zustand: bool) -> list[Befund]:
     befunde: list[Befund] = []
     belege = list(v.belege.all())
     personen = [e for e in (v.von, v.nach) if e.typ == "person"]
     privat = [e for e in personen if e.ist_privatperson]
 
-    # Regel 1: keine Verbindung ohne Quelle, jede Quelle nachprüfbar und archiviert.
+    # Regel 1: keine Verbindung ohne Quelle, jede Quelle nachprüfbar und gesichert.
     if not belege:
         befunde.append(Befund("ohne_quelle", "Kein Beleg. Ohne Quelle geht kein Faden raus."))
     for beleg in belege:
@@ -97,7 +119,9 @@ def _roh_befunde(v: Verbindung, ohne_zustand: bool) -> list[Befund]:
         if not q.abgerufen_am:
             befunde.append(Befund("quelle_ohne_abruf", f"Quelle „{q.titel}“ ohne Abrufdatum."))
         if q.url and not q.archiv_url:
-            befunde.append(Befund("quelle_ohne_archiv", f"Quelle „{q.titel}“ ohne Archivkopie."))
+            befund = _ohne_archiv(q)
+            if befund:
+                befunde.append(befund)
 
     # Regel 3: Verdacht gegen eine Person nur mit Anhörung und zwei unabhängigen Quellen.
     if v.aussageart == Aussageart.VERDACHT and personen:

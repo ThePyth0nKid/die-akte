@@ -3,7 +3,7 @@
 
 import { authFetch } from "@/lib/api"
 import type {
-  Board, Entitaet, EntitaetDetail, EntitaetKurz, Fahrt, Karte, Mappe, Pruefung, Quelle, Rahmen,
+  Board, Einstellungen, Entitaet, EntitaetDetail, EntitaetKurz, Fahrt, Karte, Mappe, Pruefung, Quelle, Rahmen,
   Verbindung, Wand, Zettel,
 } from "./typen"
 
@@ -36,14 +36,14 @@ async function anfrage<T>(pfad: string, init: RequestInit = {}): Promise<T> {
 }
 
 /** Lesen mit Konto, sonst ohne: Wer keine Sitzung hat, bekommt die öffentlichen Boards (nur lesen). */
-async function lesen<T>(pfad: string): Promise<T> {
+async function lesen<T>(pfad: string, signal?: AbortSignal): Promise<T> {
   try {
-    return await anfrage<T>(pfad)
+    return await anfrage<T>(pfad, signal ? { signal } : {})
   } catch (e) {
     // authFetch meldet eine fehlende oder abgelaufene Sitzung so; alles andere ist ein echter Fehler.
     if (!(e instanceof Error) || e instanceof AkteFehler || e.message !== "Session expired") throw e
   }
-  const res = await fetch(`${API_DIREKT}${pfad}`, { credentials: "omit" })
+  const res = await fetch(`${API_DIREKT}${pfad}`, { credentials: "omit", signal })
   const daten = await res.json().catch(() => null)
   if (!res.ok) throw new AkteFehler(res.status, daten)
   return daten as T
@@ -66,6 +66,8 @@ export const akte = {
   boardAendern: (slug: string, daten: Partial<Board>) =>
     anfrage<Board>(`/boards/${slug}/`, json("PATCH", daten)),
   wand: (slug: string) => lesen<Wand>(`/boards/${slug}/`),
+  /** Fingerabdruck der Wand: ändert sich bei jeder Änderung an ihr (Live-Aktualisierung). */
+  stand: (slug: string, signal?: AbortSignal) => lesen<{ stand: string }>(`/boards/${slug}/stand/`, signal),
   pruefung: (slug: string) => anfrage<Pruefung>(`/boards/${slug}/pruefung/`),
   lesevorschau: (slug: string) => anfrage<Wand>(`/boards/${slug}/lesevorschau/`),
 
@@ -134,4 +136,8 @@ export const akte = {
       `/weg/?von=${von}&nach=${nach}${nurBelegt ? "&nur_belegt=1" : ""}`,
     ),
   exportUrl: () => `/api/proxy${BASIS}/export/obsidian/`,
+
+  /** Einstellungen der ganzen Akte (nur Redaktion). */
+  einstellungen: () => anfrage<Einstellungen>("/einstellungen/"),
+  einstellungenAendern: (daten: Partial<Einstellungen>) => anfrage<Einstellungen>("/einstellungen/", json("PATCH", daten)),
 }

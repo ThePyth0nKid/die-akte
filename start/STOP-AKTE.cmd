@@ -1,5 +1,13 @@
 @echo off
-rem Die Akte anhalten. Die Daten bleiben im Docker-Volume "akte-daten" erhalten.
-cd /d "%~dp0.."
-docker compose stop
+rem Die Akte anhalten (Windows). Die Daten bleiben erhalten. Die Arbeit macht start\akte.ps1.
+if not exist "%~dp0akte.ps1" goto nicht_entpackt
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%~dp0akte.ps1" stop -Fenster %*
+exit /b %ERRORLEVEL%
+
+:nicht_entpackt
+"%SystemRoot%\System32\chcp.com" 65001 >nul
+echo.
+echo Bitte zuerst entpacken: Rechtsklick auf die ZIP-Datei, dann „Alle extrahieren“.
+echo.
 pause
+exit /b 2
