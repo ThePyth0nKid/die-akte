@@ -14,10 +14,31 @@ Die Wand erzwingt Belege. Was davon veröffentlicht werden darf, entscheidet
 allein ``akte/pruefung.py`` — keine View und kein Serializer entscheidet selbst.
 """
 
+import re
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, URLValidator
 from django.db import models
+
+#: Bilder, die mit der Akte ausgeliefert werden (z. B. die Fotos der Demo), liegen unter /static/akte/.
+_BILD_STATISCH = re.compile(r"/static/akte/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*\.(?:webp|png|jpg|jpeg|svg)")
+_BILD_FERN = URLValidator(schemes=["http", "https"])
+
+
+def bild_adresse(wert: str) -> None:
+    """Bild einer Karte: eine http(s)-Adresse oder ein Bild, das die Akte selbst ausliefert (/static/akte/…).
+
+    Der eigene Pfad kommt ohne Punktsegmente, doppelte Schrägstriche, Abfrage und Anker aus; alles andere, auch
+    ``javascript:`` und ``data:``, wird abgelehnt.
+    """
+    if not wert:
+        return
+    if wert.startswith("/"):
+        if not _BILD_STATISCH.fullmatch(wert):
+            raise ValidationError("Eigene Bilder nur als /static/akte/<ordner>/<name>.webp (auch png, jpg, svg).")
+        return
+    _BILD_FERN(wert)
 
 
 class Status(models.TextChoices):
@@ -88,7 +109,7 @@ class Entitaet(Zeitstempel):
     slug = models.SlugField(max_length=220, unique=True)
     kurzbeschreibung = models.CharField(max_length=300, blank=True)
     notiz_md = models.TextField(blank=True, help_text="Obsidian-Notiz, [[Name]] verlinkt.")
-    bild_url = models.URLField(blank=True)
+    bild_url = models.CharField(max_length=200, blank=True, validators=[bild_adresse])
     #: Pflicht bei fremden Fotos: „Foto: <Urheber>, CC BY-SA 4.0, Wikimedia Commons“ — steht auf der Karte.
     bild_nachweis = models.CharField(max_length=200, blank=True)
     wikidata_qid = models.CharField(max_length=20, blank=True)

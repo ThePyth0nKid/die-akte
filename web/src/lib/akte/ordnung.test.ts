@@ -48,4 +48,11 @@ describe("bildArt", () => {
     expect(bildArt("Foto: UK Government, CC BY 2.0, Wikimedia Commons")).toBe("fuellend")
     expect(bildArt("")).toBe("fuellend")
   })
+
+  it("füllt KI-Fotos der Demo und zeigt ihre gezeichneten Logos und Wappen als Zeichen", () => {
+    expect(bildArt("KI-Bild · erfundene Person")).toBe("fuellend")
+    expect(bildArt("KI-Bild · erfundenes Gebäude")).toBe("fuellend")
+    expect(bildArt("Wappen: Freie Stadt Musterhafen (erfunden) · eigene Zeichnung")).toBe("zeichen")
+    expect(bildArt("Logo: Kranich Holding AG (erfunden) · eigene Zeichnung")).toBe("zeichen")
+  })
 })

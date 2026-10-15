@@ -208,6 +208,8 @@ ein fertig gebautes Paket als Release-Anhang mit veröffentlichter Prüfsumme un
   Karte mit dieser Angabe unterschreibt; der Dialog zeigt sie.
 * In Mappen gelten für Bündel-Fäden die Prüfregeln des Boards, das man gerade ansieht, nicht die des Unter-Boards.
 * Der Atlas-Prüfer im Browser kennt nur den nachsichtigen Modus; die strikte Kette prüft `akte pruefe-signaturen`.
+* Ein Kartenbild mit fremder Adresse (`https://…`) lädt der Browser jedes Betrachters direkt vom fremden Server. Der
+  sieht dabei IP-Adresse und Zeitpunkt. Nur die Bilder der Demo (`/static/akte/demo/`) liefert die Akte selbst aus.
 
 ## Sicherheitslücken melden
 

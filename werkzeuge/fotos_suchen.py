@@ -61,7 +61,7 @@ KI_MUSTER = re.compile(r"ai-generated|(generated|created) (by|with|using) (ai|ar
 ENDUNGEN = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
 LADE_HOSTS = {"upload.wikimedia.org", "commons.wikimedia.org"}  # Bilder nur von Wikimedia
 WIEDERHOLEN = (429, 500, 502, 503, 504)
-#: bild_url und bild_nachweis sind in der Akte-API höchstens 200 Zeichen lang (Django-URLField).
+#: bild_url und bild_nachweis sind in der Akte-API höchstens 200 Zeichen lang.
 MAX_LAENGE = 200
 
 s = requests.Session()

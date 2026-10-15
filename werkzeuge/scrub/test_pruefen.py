@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import struct
 import sys
+import zlib
 from pathlib import Path
 
 import pytest
@@ -380,3 +382,104 @@ def test_beide_felder_fuer_einen_commit(tmp_path, monkeypatch):
     monkeypatch.setattr(scrub, "AUSNAHMEN", datei)
     monkeypatch.chdir(repo)
     assert [f.zeile for f in scrub.historie_pruefen(scrub._regeln_lesen("geheimwort", True, "privat"))] == [5]
+# ─── Bilder: Metadaten ja, Pixeldaten nein ──────────────────────────────────────────────────────────────────
+
+# Ein Laufwerkspfad, zusammengesetzt, damit diese Datei selbst sauber bleibt.
+PFAD = ("Ablage " + "D" + ":/" + "Projekte/geheim/bild.psd").encode()
+
+
+def _png_teil(art: bytes, inhalt: bytes, crc: int | None = None) -> bytes:
+    pruef = zlib.crc32(art + inhalt) if crc is None else crc
+    return len(inhalt).to_bytes(4, "big") + art + inhalt + pruef.to_bytes(4, "big")
+
+
+def _png(*teile: bytes, hinten: bytes = b"") -> bytes:
+    kopf = _png_teil(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0))
+    return b"\x89PNG\r\n\x1a\n" + kopf + b"".join(teile) + _png_teil(b"IEND", b"") + hinten
+
+
+def _bloecke(daten: bytes) -> bytes:
+    return b"".join(bytes([len(daten[i:i + 255])]) + daten[i:i + 255] for i in range(0, len(daten), 255)) + b"\0"
+
+
+def _gif(*teile: bytes, ende: bytes = b"\x3b") -> bytes:
+    return b"GIF89a" + struct.pack("<HHBBB", 1, 1, 0, 0, 0) + b"".join(teile) + ende
+
+
+GIF_BILD = b"\x2c" + struct.pack("<HHHHB", 0, 0, 1, 1, 0) + b"\x02" + _bloecke(PFAD)
+
+
+def _riff(art: bytes, inhalt: bytes) -> bytes:
+    return art + len(inhalt).to_bytes(4, "little") + inhalt + (b"\0" if len(inhalt) & 1 else b"")
+
+
+def _webp(*teile: bytes, groesse_falsch: bool = False) -> bytes:
+    koerper = b"WEBP" + b"".join(teile)
+    return b"RIFF" + (len(koerper) + groesse_falsch).to_bytes(4, "little") + koerper
+
+
+def _funde(tmp_path, name: str, daten: bytes, max_mb: int = 50):
+    datei = tmp_path / name
+    datei.write_bytes(daten)
+    return scrub.dateien_pruefen([datei], tmp_path, _oeffentlich(), max_mb=max_mb)
+
+
+def test_bild_metadaten_werden_geprueft(tmp_path):
+    xmp = b"<x:xmpmeta><rdf:Description>" + PFAD + b"</rdf:Description></x:xmpmeta>"
+    magie = bytes([1]) + bytes(range(255, -1, -1)) + b"\0"  # XMP in GIF: roh, dahinter 258 Bytes Ausgleich
+    bilder = {
+        "text.png": _png(_png_teil(b"tEXt", b"Quelle\0" + PFAD)),
+        "gepackt.png": _png(_png_teil(b"zTXt", b"Quelle\0\0" + zlib.compress(PFAD))),
+        "itxt.png": _png(_png_teil(b"iTXt", b"XML:com.adobe.xmp\0\x01\0de\0\0" + zlib.compress(xmp))),
+        "exif.png": _png(_png_teil(b"eXIf", b"MM\0*" + PFAD)),
+        "unbekannt.png": _png(_png_teil(b"prVt", PFAD)),
+        "kommentar.gif": _gif(b"\x21\xfe" + _bloecke(PFAD)),
+        "xmp.gif": _gif(b"\x21\xff" + _bloecke(b"XMP DataXMP")[:-1] + xmp + magie),
+        "xmp.webp": _webp(_riff(b"VP8L", b"\0" * 8), _riff(b"XMP ", xmp)),
+        "exif-im-bild.webp": _webp(_riff(b"ANMF", bytes(16) + _riff(b"VP8L", b"\0") + _riff(b"EXIF", PFAD))),
+    }
+    for name, daten in bilder.items():
+        assert [f.regel.nummer for f in _funde(tmp_path, name, daten)] != [], name
+
+
+def test_pixeldaten_werden_nicht_geprueft(tmp_path):
+    bilder = {
+        "pixel.png": _png(_png_teil(b"PLTE", PFAD[:15]), _png_teil(b"IDAT", PFAD)),
+        "pixel.gif": _gif(GIF_BILD),
+        "pixel.webp": _webp(_riff(b"VP8X", bytes(10)), _riff(b"ALPH", PFAD), _riff(b"VP8L", PFAD)),
+        "animiert.webp": _webp(_riff(b"ANIM", bytes(6)), _riff(b"ANMF", bytes(16) + _riff(b"VP8 ", PFAD))),
+    }
+    for name, daten in bilder.items():
+        assert _funde(tmp_path, name, daten) == [], name
+
+
+def test_unsauberes_bild_wird_ganz_geprueft(tmp_path):
+    idat = _png_teil(b"IDAT", PFAD)
+    bilder = {
+        "hinten.png": _png(idat, hinten=b"\0"),
+        "pruefsumme.png": _png(_png_teil(b"IDAT", PFAD, crc=0)),
+        "ohne-ende.png": _png(idat)[:-12],
+        "ohne-ende.gif": _gif(GIF_BILD, ende=b""),
+        "hinten.gif": _gif(GIF_BILD, ende=b"\x3b\0"),
+        "groesse.webp": _webp(_riff(b"VP8L", PFAD), groesse_falsch=True),
+        "abgeschnitten.webp": _webp(_riff(b"VP8L", PFAD))[:-2],
+    }
+    for name, daten in bilder.items():
+        funde = _funde(tmp_path, name, daten)
+        assert funde and all(f.regel is not scrub.UNGEPRUEFT for f in funde), name
+
+
+def test_zu_grosser_gepackter_bildtext_ist_ein_fund(tmp_path):
+    bombe = _png(_png_teil(b"zTXt", b"Kommentar\0\0" + zlib.compress(b"\0" * (2 * 1024 * 1024))))
+    funde = _funde(tmp_path, "bombe.png", bombe, max_mb=1)
+    assert [f.regel is scrub.UNGEPRUEFT for f in funde] == [True]
+    kaputt = _png(_png_teil(b"zTXt", b"Kommentar\0\0kein zlib"))
+    assert [f.regel is scrub.UNGEPRUEFT for f in _funde(tmp_path, "kaputt.png", kaputt)] == [True]
+    # Ein zweiter gepackter Strom hinter dem ersten bliebe ungelesen.
+    zwei = _png(_png_teil(b"zTXt", b"Kommentar\0\0" + zlib.compress(b"harmlos") + zlib.compress(PFAD)))
+    assert [f.regel is scrub.UNGEPRUEFT for f in _funde(tmp_path, "zwei.png", zwei)] == [True]
+
+
+def test_bild_mit_zu_vielen_teilen_wird_ganz_geprueft(tmp_path):
+    viele = _png(*[_png_teil(b"tEXt", b"a\0b")] * (scrub.MAX_BILD_TEILE + 1), _png_teil(b"IDAT", PFAD))
+    assert _funde(tmp_path, "viele.png", viele) != []

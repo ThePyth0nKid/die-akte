@@ -183,7 +183,7 @@ Nach dem Neustart: `boards_liste` aufrufen. Antwortet die Akte mit „Die Akte i
 
 ### 7. Erster Auftrag
 
-Mit `demo -Still` lädst du die erfundene Demo-Akte „Freie Stadt Musterhafen“ (8 Karten, 6 Quellen, 7 Fäden, alles
+Mit `demo -Still` lädst du die erfundene Demo-Akte „Freie Stadt Musterhafen“ (9 Karten, 6 Quellen, 9 Fäden, alles
 erfunden). Ein guter erster Auftrag dauert unter einer Minute: „Lies die Wand demo-musterhafen und sag mir, welche
 Fäden noch offene Befunde haben.“
 

@@ -9,6 +9,9 @@ erzeugt; deshalb funktionieren Beweissicherung und Fundstellen ohne Internet. Ab
 
 * ein Zitat, das leicht vom Wortlaut abweicht (Fundstelle „nicht gefunden“),
 * ein Faden zu einer Privatperson über Familie (sperrt, bis ein Mensch mit Begründung überstimmt),
+* alle drei Faden-Arten: belegt, ein Verdacht (bleibt Entwurf) und eine Meinung (unterschrieben),
+* Kartenbilder in jeder Variante: KI-Fotos mit Kennzeichnung, Logo und Wappen als eigene Zeichnung, eine
+  Privatperson nur mit Initialen. Die Bilder liegen unter ``akte/static/akte/demo/`` (CC0) und kommen mit der Akte,
 * signierte Freigaben mit einem Demo-Schlüssel, damit ``akte pruefe-signaturen`` sofort etwas zu prüfen hat.
 
 Demo-Objekte tragen die Markierung ``akte-demo`` (Karten im Feld ``tags``, Quellen in ``notiz``). ``--neu`` löscht nur
@@ -47,13 +50,28 @@ KARTEN = [
     ("max", "Max Mustermann", "person", "Vorstand der Nordlicht Analytik GmbH", True),
     ("thea", "Thea Beispiel", "person", "Privatperson", False),
     ("mdag", "Musterhafener Datengesetz (MDAG) § 4", "gesetz", "Entwurf: zentrale Datenauswertung", False),
+    ("kameras", "Verkehrskameras Musterhafen", "system", "Kameranetz an den Kreuzungen der Stadt", False),
 ]
+
+# Bild und Nachweis je Karte. Der Nachweis steht auf der Karte; „Logo:“ und „Wappen:“ am Anfang zeigen das Bild als
+# Zeichen auf hellem Grund (web/src/lib/akte/ordnung.ts, bildArt). Thea bleibt mit Absicht ohne Bild, MDAG auch.
+BILD = "/static/akte/demo/"
+BILDER = {
+    "erika": (BILD + "erika-mustermann.webp", "KI-Bild · erfundene Person"),
+    "max": (BILD + "max-mustermann.webp", "KI-Bild · erfundene Person"),
+    "rechnungshof": (BILD + "rechnungshof.webp", "KI-Bild · erfundenes Gebäude"),
+    "kameras": (BILD + "verkehrskameras.webp", "KI-Bild · erfundene Anlage"),
+    "senat": (BILD + "senat-wappen.svg", "Wappen: Freie Stadt Musterhafen (erfunden) · eigene Zeichnung"),
+    "nordlicht": (BILD + "nordlicht-logo.svg", "Logo: Nordlicht Analytik GmbH (erfunden) · eigene Zeichnung"),
+    "kranich": (BILD + "kranich-logo.svg", "Logo: Kranich Holding AG (erfunden) · eigene Zeichnung"),
+}
 
 QUELLEN = {
     "drs": ("Drucksache 9/1234 – Antwort des Senats", "Bürgerschaft Musterhafen", "primaer", [
         ["Antwort des Senats auf die Kleine Anfrage zur Datenauswertung.",
          "Der Senat beauftragt die Nordlicht Analytik GmbH mit der Auswertung der Verkehrsdaten.",
-         "Das Auftragsvolumen beträgt 1.250.000 Euro."],
+         "Das Auftragsvolumen beträgt 1.250.000 Euro.",
+         "Die Verkehrsdaten stammen aus dem Netz der Verkehrskameras; zuständig ist die Senatorin für Inneres."],
         ["Der Entwurf des Musterhafener Datengesetzes sieht in § 4 eine zentrale Auswertung vor.",
          "Die Daten werden zentral gespeichert."],
     ]),
@@ -71,7 +89,8 @@ QUELLEN = {
          "Der Rechnungshof empfiehlt, künftige Aufträge auszuschreiben."],
     ]),
     "zeitung": ("Musterhafener Rundschau, 12.05.2025", "Musterhafener Rundschau", "sekundaer", [
-        ["Thea Beispiel ist die Schwester von Max Mustermann, berichten Nachbarn."],
+        ["Thea Beispiel ist die Schwester von Max Mustermann, berichten Nachbarn.",
+         "Aus der Verwaltung heißt es, die Kranich Holding AG habe die Kameras geliefert."],
     ]),
 }
 
@@ -95,10 +114,18 @@ FAEDEN = [
     # Privatperson über Familie: sperrt von Haus aus.
     ("thea", "max", "familie", "verwandt", "2025-05-12", "aktuell", "belegt",
      ("zeitung", "Thea Beispiel ist die Schwester von Max Mustermann, berichten Nachbarn.", "S. 1"), False),
+    # Nur eine Stimme aus der Verwaltung: ein Verdacht, kein Beleg. Bleibt Entwurf und damit intern.
+    ("kranich", "kameras", "auftrag", "soll die Kameras geliefert haben", "2023-09-01", "aktuell", "verdacht",
+     ("zeitung", "Aus der Verwaltung heißt es, die Kranich Holding AG habe die Kameras geliefert.", "S. 1"), False),
+    # Einschätzung der Redaktion auf belegter Grundlage, als Meinung gekennzeichnet und unterschrieben.
+    ("erika", "kameras", "sonstiges", "trägt die politische Verantwortung", "2022-02-15", "aktuell", "meinung",
+     ("drs", "Die Verkehrsdaten stammen aus dem Netz der Verkehrskameras; zuständig ist die Senatorin für Inneres.",
+      "S. 1"), True),
 ]
 
 RAHMEN = {
-    "Der Auftrag": ["Senat der Freien Stadt Musterhafen", "Nordlicht Analytik GmbH", "Erika Mustermann"],
+    "Der Auftrag": ["Senat der Freien Stadt Musterhafen", "Nordlicht Analytik GmbH", "Erika Mustermann",
+                    "Verkehrskameras Musterhafen"],
     "Die Eigentümer": ["Kranich Holding AG", "Max Mustermann", "Thea Beispiel"],
     "Kontrolle und Gesetz": ["Rechnungshof Musterhafen", "Musterhafener Datengesetz (MDAG) § 4"],
 }
@@ -151,8 +178,11 @@ class Command(BaseCommand):
                         format="json"))
             karten = {}
             for i, (schl, name, typ, kurz, oeffentlich) in enumerate(KARTEN):
+                # Das Bild gleich beim Anlegen: es gehört damit zum unterschriebenen Inhalt der Karte.
+                bild_url, bild_nachweis = BILDER.get(schl, ("", ""))
                 e = ok(api.post(f"{A}/entitaeten/", {"name": name, "typ": typ, "kurzbeschreibung": kurz,
-                                                     "oeffentliche_person": oeffentlich, "tags": [MARKE]},
+                                                     "oeffentliche_person": oeffentlich, "tags": [MARKE],
+                                                     "bild_url": bild_url, "bild_nachweis": bild_nachweis},
                                 format="json"))
                 karten[schl] = e
                 ok(api.post(f"{A}/boards/{SLUG}/karten/", {"entitaet": e["id"], "x": (i % 4) * 400, "y": (i // 4) * 500},
