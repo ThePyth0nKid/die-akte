@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-akte-text", display:
 const plex = IBM_Plex_Mono({ weight: ["400", "600"], subsets: ["latin"], variable: "--font-akte-mono", display: "swap" })
 
 export const metadata: Metadata = {
-  title: process.env.AKTE_TITEL || "Die Akte",
+  title: process.env.AKTE_TITEL || "Ultra-Akte",
   robots: { index: false, follow: false },
 }
 

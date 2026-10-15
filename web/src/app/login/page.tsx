@@ -38,7 +38,7 @@ function Formular() {
       {/* Die Akte hat noch kein Konto: Der Weg dorthin steht über allem, nicht versteckt hinter einem Fehlschlag. */}
       {einrichtungOffen && <ErstesKontoHinweis />}
       <form onSubmit={anmelden} className="w-full space-y-4 rounded-lg border border-white/10 bg-white/5 p-6">
-        <h1 className="text-2xl font-semibold tracking-wide">Die Akte</h1>
+        <h1 className="text-2xl font-semibold tracking-wide">Ultra-Akte</h1>
         {neu && (
           <p role="status" className="rounded border border-[#f0c674]/40 bg-[#f0c674]/10 p-3 text-sm">
             Dein Konto ist angelegt. Melde dich jetzt damit an.

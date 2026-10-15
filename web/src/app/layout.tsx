@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: process.env.AKTE_TITEL || "Die Akte",
+  title: process.env.AKTE_TITEL || "Ultra-Akte",
   robots: { index: false, follow: false },
 }
 

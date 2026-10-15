@@ -133,7 +133,7 @@ class EinrichtungTest(TestCase):
         self.assertEqual(self._post().status_code, 201)
         antwort = self._post(benutzername="mallory")
         self.assertEqual(antwort.status_code, 409)
-        self.assertEqual(antwort.json(), {"fehler": "Die Akte ist schon eingerichtet. Bitte anmelden."})
+        self.assertEqual(antwort.json(), {"fehler": "Die Ultra-Akte ist schon eingerichtet. Bitte anmelden."})
         self.assertFalse(User.objects.filter(username="mallory").exists())
 
     def test_falscher_code_legt_nichts_an(self):

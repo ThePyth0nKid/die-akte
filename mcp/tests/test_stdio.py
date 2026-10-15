@@ -32,7 +32,7 @@ def test_stdio_start_und_werkzeugliste(backend):
                 return info.serverInfo.name, info.instructions or "", werkzeuge
 
     name, anweisung, werkzeuge = asyncio.run(lauf())
-    assert name == "die-akte"
+    assert name == "ultra-akte"
     assert "Freigeben tut ein Mensch" in anweisung
     assert werkzeuge == {"boards_liste", "wand_lesen", "suche", "weg"}
 

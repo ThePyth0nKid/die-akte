@@ -38,7 +38,7 @@ export default function AkteStart() {
       // Ohne Anmeldung und ohne öffentliche Boards: keine Fehlermeldung, sondern der Weg zum Login.
       if (e instanceof AkteFehler && e.status === 401) setBoards([])
       else setFehler(e instanceof AkteFehler && e.status === 403
-        ? "Die Akte ist bisher nur für die Redaktion offen."
+        ? "Die Ultra-Akte ist bisher nur für die Redaktion offen."
         : "Die Boards konnten nicht geladen werden.")
     })
   }, [])
@@ -69,7 +69,7 @@ export default function AkteStart() {
             Ermittler-Wand
           </p>
           <h1 className="font-[family-name:var(--font-akte-titel)] text-6xl uppercase tracking-wide">
-            Die Akte
+            Ultra-Akte
           </h1>
         </div>
         <div className="flex items-center gap-2">
@@ -132,7 +132,7 @@ export default function AkteStart() {
 
 // AGPL-3.0 § 13: Wer die Akte im Netz betreibt, bietet allen Nutzern den Quelltext an.
 function Quelltext() {
-  const url = process.env.NEXT_PUBLIC_AKTE_QUELLTEXT_URL || "https://github.com/ThePyth0nKid/die-akte"
+  const url = process.env.NEXT_PUBLIC_AKTE_QUELLTEXT_URL || "https://github.com/ThePyth0nKid/ultra-akte"
   return (
     <footer className="mt-12 text-xs text-[#8A94A0]">
       <a href={url} className="underline" rel="noopener noreferrer">Quelltext</a> · freie Software unter AGPL-3.0

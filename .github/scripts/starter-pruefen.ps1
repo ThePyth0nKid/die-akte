@@ -449,7 +449,7 @@ try {
     $aufrufe = [IO.File]::ReadAllText($Protokoll)
     Pruefe 'agent: Rückgabe 0 und Schlusssatz' (($r.Code -eq 0) -and $r.Text.Contains('Fertig. Beende Claude (/exit) und starte es neu mit: claude --continue')) "Code $($r.Code)`n$($r.Text)"
     Pruefe 'agent: Token erscheint nie in der Ausgabe' (-not $r.Text.Contains('ATTRAPPExTOKENxATTRAPPExTOKENxATTRAPPExx')) $r.Text
-    $quelle = "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v$Version.zip#subdirectory=mcp"
+    $quelle = "https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v$Version.zip#subdirectory=mcp"
     $erwartetMcp = "claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:$Port -e AKTE_TOKEN=ATTRAPPExTOKENxATTRAPPExTOKENxATTRAPPExx -- uvx --python 3.12 --from $quelle akte-mcp"
     Pruefe 'agent: claude mcp add wie im Vertrag' ($aufrufe.Contains($erwartetMcp)) $aufrufe
     Pruefe 'agent: alter Eintrag wird vorher entfernt' ($aufrufe.Contains('claude mcp remove akte -s user')) $aufrufe

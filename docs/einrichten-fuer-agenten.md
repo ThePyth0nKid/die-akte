@@ -1,4 +1,4 @@
-# Die Akte einrichten – ausführlich, für Agenten
+# Ultra-Akte einrichten – ausführlich, für Agenten
 
 Die Kurzfassung mit allen Befehlen steht wörtlich gleich im [README](../README.md#für-ki-agenten-so-richtest-du-die-akte-für-deinen-menschen-ein)
 und in [AGENTS.md](../AGENTS.md). Diese Seite erklärt, was bei jedem Schritt passiert, was dein Mensch dabei sieht
@@ -71,7 +71,7 @@ Mensch lädt selbst? Dann kennt er vielleicht diese Fehler:
 | Was dein Mensch sieht | Ursache | Was du tust |
 |---|---|---|
 | Doppelklick auf START-AKTE: Fenster blitzt auf und verschwindet, oder die Meldung „Bitte zuerst entpacken“ | Er hat die Datei in der ZIP angeklickt. Windows entpackt dann nur diese eine Datei. | ZIP mit Rechtsklick → „Alle extrahieren“ entpacken. Der Starter meldet das jetzt selbst (Rückgabe 2). |
-| Ordner doppelt verschachtelt (`die-akte-0.2.0\die-akte-0.2.0`) | So entpackt Windows GitHub-ZIPs | egal; START-AKTE liegt im inneren Ordner unter `start` |
+| Ordner doppelt verschachtelt (`ultra-akte-0.3.0\ultra-akte-0.3.0`) | So entpackt Windows GitHub-ZIPs | egal; START-AKTE liegt im inneren Ordner unter `start` |
 | „Der Herausgeber konnte nicht verifiziert werden … Unbekannter Herausgeber“ | Die Datei kommt aus dem Internet und ist nicht signiert. | „Ausführen“. Den Haken „Vor dem Öffnen immer bestätigen“ darf er abwählen. |
 | Datei „START-AKTE“ zweimal ähnlich im Ordner `start` | Windows blendet Dateiendungen aus; `start-akte` ist die Datei für den Mac | Die richtige ist vom Typ „Windows-Befehlsskript“. |
 
@@ -122,7 +122,7 @@ löscht ihn aus `.env`.
 | Keine Seite offen, oder er hat sie geschlossen | `start -Still` noch einmal aufrufen (oder er doppelklickt `START-AKTE` im Ordner `Akte\start`); der Starter öffnet sie wieder mit dem Code |
 | Seite offen, aber das Feld für den Code ist leer, oder „Einrichtungscode stimmt nicht.“ | Seite schließen, `start -Still` noch einmal; hilft das nicht: Notweg unten. Den Code zeigt keine Konsole, auch nicht das Fenster von `START-AKTE`. |
 | Kein Browser geht auf | Notweg unten |
-| „Die Akte ist schon eingerichtet. Bitte anmelden.“ | Es gibt schon ein Konto. Er meldet sich an; Passwort vergessen: [betrieb.md](betrieb.md#befehle-für-die-redaktion) (`changepassword`) |
+| „Die Ultra-Akte ist schon eingerichtet. Bitte anmelden.“ | Es gibt schon ein Konto. Er meldet sich an; Passwort vergessen: [betrieb.md](betrieb.md#befehle-für-die-redaktion) (`changepassword`) |
 | Die Seite nennt den Notweg im Terminal (`einrichtung_grund` ist `kein_code`) | Notweg unten |
 
 Notweg ohne Browser und ohne Code: Dein Mensch öffnet PowerShell und tippt diese Zeile. Das Programm fragt nach
@@ -150,7 +150,7 @@ Was passiert, in dieser Reihenfolge:
 4. uv wird installiert, falls es fehlt: feste Version 0.12.21 des offiziellen Installers von astral.sh. Der
    Starter lädt die Datei, vergleicht ihre SHA-256-Prüfsumme mit der im Starter hinterlegten und führt sie nur bei
    Gleichheit aus (sonst 8, mit Grund).
-5. Vorwärmen: `uvx --python 3.12 --from "…/v0.2.0.zip#subdirectory=mcp" akte --help` lädt Python 3.12 und die Pakete
+5. Vorwärmen: `uvx --python 3.12 --from "…/v0.3.0.zip#subdirectory=mcp" akte --help` lädt Python 3.12 und die Pakete
    einmal (sonst 11). So läuft Claude Code beim ersten Start nicht in seine Zeitgrenze.
 6. Der Token kommt aus `docker compose exec -T api python manage.py akte_token KONTO`, ohne Anzeige (sonst 12).
 7. Alte Einträge `akte` werden entfernt (`claude mcp remove akte -s local` und `-s user`), dann:
@@ -178,7 +178,7 @@ Der Schlusssatz des Starters lautet: „Fertig. Beende Claude (/exit) und starte
 der Starter den Pfad neu eingetragen, sagt er zusätzlich, dass dafür ein neues Terminal-Fenster im selben Ordner
 nötig ist. `--continue` setzt dieses Gespräch fort; du weißt danach noch, wo ihr wart.
 
-Nach dem Neustart: `boards_liste` aufrufen. Antwortet die Akte mit „Die Akte ist nicht erreichbar. Läuft sie?“, prüf
+Nach dem Neustart: `boards_liste` aufrufen. Antwortet die Akte mit „Die Ultra-Akte ist nicht erreichbar. Läuft sie?“, prüf
 `status -Json` und starte sie mit `start -Still`.
 
 ### 7. Erster Auftrag

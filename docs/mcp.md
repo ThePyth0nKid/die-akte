@@ -1,4 +1,4 @@
-# Die Akte mit Claude Code (MCP)
+# Ultra-Akte mit Claude Code (MCP)
 
 `akte-mcp` verbindet Claude Code (oder jeden anderen MCP-Client) mit deiner Akte. MCP ist die gemeinsame Sprache,
 über die Claude die Werkzeuge anderer Programme benutzt.
@@ -37,13 +37,13 @@ laufen gleich in PowerShell und in der Bash.
    du in `.env` unter `AKTE_PORT` und ersetzt `8080` damit):
 
    ```
-   claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=mcp" akte-mcp
+   claude mcp add --scope user akte -e AKTE_BASIS=http://127.0.0.1:8080 -e AKTE_TOKEN=DEIN-TOKEN -- uvx --python 3.12 --from "https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v0.3.0.zip#subdirectory=mcp" akte-mcp
    ```
 
 3. Einmal vorwärmen, damit Claude beim ersten Start nicht in seine Zeitgrenze läuft:
 
    ```
-   uvx --python 3.12 --from "https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=mcp" akte --help
+   uvx --python 3.12 --from "https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v0.3.0.zip#subdirectory=mcp" akte --help
    ```
 
 Warum es genau so aussieht:
@@ -62,7 +62,7 @@ Warum es genau so aussieht:
   nicht dein eigener Rechner ist. Für eine Akte im Netz gehört `https://` in `AKTE_BASIS`.
 * Ohne Token sieht Claude in einer Akte auf deinem Rechner nichts: Lesen ohne Konto ist dort aus.
 
-Prüfen: In Claude Code zeigt `/mcp` den Eintrag `akte` als verbunden. Antwortet ein Werkzeug „Die Akte ist nicht
+Prüfen: In Claude Code zeigt `/mcp` den Eintrag `akte` als verbunden. Antwortet ein Werkzeug „Die Ultra-Akte ist nicht
 erreichbar … Läuft sie?“, starte die Akte (`start\START-AKTE`).
 
 ## Werkzeuge

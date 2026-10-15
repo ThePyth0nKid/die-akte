@@ -1,11 +1,11 @@
 ---
 name: akte-fuehren
-description: 'An einer Akte (Ermittler-Wand mit Belegpflicht) arbeiten: Karten für Personen, Firmen, Behörden, Gesetze anlegen, belegte Fäden mit Quelle und wörtlichem Zitat ziehen, Zitate an der Quelle prüfen lassen, Themen-Rahmen setzen, Kamerafahrten für Videos bauen und offene Befunde melden. Nutze diesen Skill bei „Akte“, „Wand“, „Board“, „Ermittler-Board“, „Faden ziehen“, „Verbindung belegen“, „Fahrt für Kapitel“, und immer, wenn die MCP-Werkzeuge von akte-mcp im Spiel sind. Freigeben tut immer ein Mensch.'
+description: 'An einer Akte (Ermittler-Wand mit Belegpflicht) arbeiten: Karten für Personen, Firmen, Behörden, Gesetze anlegen, belegte Fäden mit Quelle und wörtlichem Zitat ziehen, Zitate an der Quelle prüfen lassen, Themen-Rahmen setzen, Kamerafahrten für Videos bauen und offene Befunde melden. Nutze diesen Skill bei „Akte“, „Ultra-Akte“, „Wand“, „Board“, „Ermittler-Board“, „Faden ziehen“, „Verbindung belegen“, „Fahrt für Kapitel“, und immer, wenn die MCP-Werkzeuge von akte-mcp im Spiel sind. Freigeben tut immer ein Mensch.'
 ---
 
 # An der Akte arbeiten
 
-Die Akte ist eine Ermittler-Wand: Karten (Personen, Firmen, Behörden, Gesetze …), Fäden zwischen ihnen und zu jedem
+Die Ultra-Akte ist eine Ermittler-Wand: Karten (Personen, Firmen, Behörden, Gesetze …), Fäden zwischen ihnen und zu jedem
 Faden Belege – Quelle, wörtliches Zitat, Fundstelle. Du arbeitest über den MCP-Server `akte-mcp` (oder die CLI
 `akte`). Alles, was du anlegst, ist ein **Entwurf**. Freigeben, Löschen und Öffentlich-Schalten kannst du nicht; das
 tut ein Mensch in der Oberfläche mit seiner Unterschrift.
@@ -119,7 +119,7 @@ Eine Station je Gedanke des Skripts. `fahrt_anlegen` ersetzt eine Fahrt mit glei
 
 ## 6. Wenn die Akte nicht antwortet
 
-Meldet ein Werkzeug „Die Akte ist nicht erreichbar … Läuft sie?“, frag den Zustand ab (Windows; macOS und Linux:
+Meldet ein Werkzeug „Die Ultra-Akte ist nicht erreichbar … Läuft sie?“, frag den Zustand ab (Windows; macOS und Linux:
 `bash ~/Akte/start/akte.sh status --json`):
 
 ```

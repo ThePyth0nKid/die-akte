@@ -66,7 +66,7 @@ def _warnen_unsicher(basis: str) -> None:
 
 class Akte:
     def __init__(self, basis: str, token: str | None = None, *, session: requests.Session | None = None,
-                 kennung: str = "akte-client/0.2"):
+                 kennung: str = "akte-client/0.3"):
         if not basis:
             raise ValueError("Adresse der Akte fehlt (z. B. http://localhost:8080).")
         self.wurzel = basis.rstrip("/")
@@ -86,10 +86,10 @@ class Akte:
         try:
             r = self.s.request(methode, f"{self.basis}{pfad}", timeout=zeitlimit, **kw)
         except requests.ConnectionError:  # auch: Verbindungsaufbau dauert zu lange (ConnectTimeout)
-            raise AkteNichtErreichbar(f"Die Akte ist nicht erreichbar ({self.wurzel}). Läuft sie? "
+            raise AkteNichtErreichbar(f"Die Ultra-Akte ist nicht erreichbar ({self.wurzel}). Läuft sie? "
                                       "Start: START-AKTE") from None
         except requests.Timeout:
-            raise AkteNichtErreichbar(f"Die Akte ({self.wurzel}) hat nicht innerhalb von {zeitlimit:.0f} s "
+            raise AkteNichtErreichbar(f"Die Ultra-Akte ({self.wurzel}) hat nicht innerhalb von {zeitlimit:.0f} s "
                                       "geantwortet. Kurz warten und noch einmal versuchen.") from None
         except requests.RequestException as fehler:  # Auffangnetz: ungültige Adresse, abgebrochene Antwort …
             raise AkteNichtErreichbar(f"Die Verbindung zur Akte ({self.wurzel}) ist gescheitert "

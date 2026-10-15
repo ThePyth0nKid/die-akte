@@ -270,7 +270,7 @@ def test_nicht_erreichbar_auf_deutsch():
         akte.boards()
     except AkteNichtErreichbar as fehler:
         assert isinstance(fehler, AkteFehler) and fehler.status == 0
-        assert "Die Akte ist nicht erreichbar" in str(fehler) and "START-AKTE" in str(fehler)
+        assert "Die Ultra-Akte ist nicht erreichbar" in str(fehler) and "START-AKTE" in str(fehler)
         assert _fehler(fehler) == {"fehler": True, "text": str(fehler)}
     else:
         raise AssertionError("Verbindungsfehler erwartet")

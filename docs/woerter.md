@@ -1,6 +1,6 @@
 # Fachwörter, in Alltagssprache
 
-Die Wörter, die in der Akte und in dieser Anleitung vorkommen. Kurz, ohne Technik-Deutsch.
+Die Wörter, die in der Ultra-Akte und in dieser Anleitung vorkommen. Kurz, ohne Technik-Deutsch.
 
 ## Auf deinem Rechner
 

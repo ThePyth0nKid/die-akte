@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # shellcheck disable=SC1111  # Deutsche Anführungszeichen „…“ sind in Bash nur Text.
 #
-# Die Akte – Starter für macOS und Linux. Dieselben Befehle wie start/akte.ps1 unter Windows.
+# Ultra-Akte – Starter für macOS und Linux. Dieselben Befehle wie start/akte.ps1 unter Windows.
 #
 #   bash start/akte.sh [start]   Docker prüfen und starten, Akte bauen und starten, Browser öffnen
 #   bash start/akte.sh stop      Akte anhalten; die Daten bleiben
@@ -29,12 +29,12 @@
 # statt des Standard-Browsers) wirkt nur zusammen mit AKTE_STARTER_TEST=1.
 set -euo pipefail
 
-AKTE_VERSION="0.2.0"
+AKTE_VERSION="0.3.0"
 HIER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WURZEL="$(cd "$HIER/.." && pwd)"
 START_ORDNER="$(pwd)"
 ENV_DATEI="$WURZEL/.env"
-MCP_QUELLE="${AKTE_MCP_QUELLE:-https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v$AKTE_VERSION.zip#subdirectory=mcp}"
+MCP_QUELLE="${AKTE_MCP_QUELLE:-https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v$AKTE_VERSION.zip#subdirectory=mcp}"
 AGENT_AUFRUF="bash \"$HIER/akte.sh\""
 # uv lädt den Akte-Baustein für Claude. Feste Version des offiziellen Installers; die geladene Datei muss genau diese
 # Prüfsumme haben, sonst läuft sie nicht (neue Version: Datei laden, sha256sum, beide Werte hier und in akte.ps1).
@@ -245,7 +245,7 @@ akte_laeuft() {
 
 meldung_docker_fehlt() {
   sag ""
-  sag_farbe "$GELB" "Docker fehlt. Die Akte läuft in Docker, deshalb brauchst du es einmal."
+  sag_farbe "$GELB" "Docker fehlt. Die Ultra-Akte läuft in Docker, deshalb brauchst du es einmal."
   if [ "$(uname -s)" = "Darwin" ]; then
     sag "macOS: Docker Desktop laden: https://www.docker.com/products/docker-desktop/"
     sag "  (Apple-Chip M1/M2/M3/M4: „Apple Silicon“, ältere Macs: „Intel Chip“), installieren, einmal öffnen, Vertrag „Accept“."
@@ -326,7 +326,7 @@ sichere_port() {
   for ((p = port + 1; p <= port + 20; p++)); do
     if port_frei "$p"; then
       setze_env_wert AKTE_PORT "$p"
-      sag "Die Akte nimmt stattdessen Port $p (gespeichert in .env als AKTE_PORT=$p)." >&2
+      sag "Die Ultra-Akte nimmt stattdessen Port $p (gespeichert in .env als AKTE_PORT=$p)." >&2
       sag "War Claude schon mit der Akte verbunden: $AGENT_AUFRUF agent noch einmal ausführen." >&2
       printf '%s' "$p"
       return 0
@@ -355,7 +355,7 @@ pruefe_akte_laeuft() {
     ende 4
   fi
   if ! akte_laeuft; then
-    sag_farbe "$GELB" "Die Akte läuft nicht. Starte sie zuerst: $AGENT_AUFRUF start"
+    sag_farbe "$GELB" "Die Ultra-Akte läuft nicht. Starte sie zuerst: $AGENT_AUFRUF start"
     ende 10
   fi
 }
@@ -440,7 +440,7 @@ zeige_einrichtung() { # $1 Basis-Adresse
   # Der Code geht nur an den Browser (Fragment der Adresse), nie in eine Konsole.
   local seite="$1/akte/einrichten" code ziel im_browser=0
   code="$(code_anzeige "$(env_wert AKTE_EINRICHTUNGSCODE)")"
-  sag_farbe "$GRUEN" "Die Akte läuft. Jetzt fehlt nur noch dein erstes Konto."
+  sag_farbe "$GRUEN" "Die Ultra-Akte läuft. Jetzt fehlt nur noch dein erstes Konto."
   ziel="$seite"
   if [ -n "$code" ]; then ziel="$seite#code=$code"; fi
   if oeffne_browser "$ziel"; then
@@ -475,7 +475,7 @@ agent_verbunden() {
 # ─── Befehle ─────────────────────────────────────────────────────────────────────────────────────────────────
 befehl_start() {
   pruefe_entpackt
-  sag "Die Akte startet."
+  sag "Die Ultra-Akte startet."
   finde_docker
   if [ -z "$DOCKER" ]; then
     meldung_docker_fehlt
@@ -485,7 +485,7 @@ befehl_start() {
   sichere_env_datei
   local port protokoll code=0 url basis
   port="$(sichere_port)"
-  sag "Die Akte wird gebaut und gestartet. Beim ersten Mal dauert das 3 bis 10 Minuten."
+  sag "Die Ultra-Akte wird gebaut und gestartet. Beim ersten Mal dauert das 3 bis 10 Minuten."
   if [ "$still" -eq 1 ]; then
     protokoll="${TMPDIR:-/tmp}/die-akte-start.log"
     (cd "$WURZEL" && "$DOCKER" compose up -d --build --wait) >"$protokoll" 2>&1 || code=$?
@@ -515,7 +515,7 @@ befehl_start() {
     zeige_einrichtung "$basis"
   else
     url="$basis/akte"
-    sag_farbe "$GRUEN" "Die Akte läuft: $url"
+    sag_farbe "$GRUEN" "Die Ultra-Akte läuft: $url"
     if [ "$STAND_ERREICHBAR" -eq 0 ]; then sag "Die Seite antwortet noch nicht. Warte eine Minute und lade sie dann neu."; fi
     if [ "$STAND_GRUND" = "eingerichtet" ]; then
       entferne_verbrauchten_code
@@ -540,14 +540,14 @@ befehl_stop() {
   local ids
   if [ -f "$ENV_DATEI" ]; then
     if (cd "$WURZEL" && "$DOCKER" compose stop); then
-      sag_farbe "$GRUEN" "Die Akte ist angehalten. Deine Daten bleiben erhalten."
+      sag_farbe "$GRUEN" "Die Ultra-Akte ist angehalten. Deine Daten bleiben erhalten."
       ende 0
     fi
   else
     ids="$("$DOCKER" ps -q --filter label=com.docker.compose.project=die-akte || true)"
     # shellcheck disable=SC2086  # mehrere Kennungen, absichtlich getrennt
     if [ -z "$ids" ] || "$DOCKER" stop $ids >/dev/null; then
-      sag_farbe "$GRUEN" "Die Akte ist angehalten. Deine Daten bleiben erhalten."
+      sag_farbe "$GRUEN" "Die Ultra-Akte ist angehalten. Deine Daten bleiben erhalten."
       ende 0
     fi
   fi
@@ -757,7 +757,7 @@ befehl_agent() {
 }
 
 befehl_hilfe() {
-  sag "Die Akte – Starter für macOS und Linux"
+  sag "Ultra-Akte – Starter für macOS und Linux"
   sag ""
   sag "  $AGENT_AUFRUF start      starten (Standard)"
   sag "  $AGENT_AUFRUF stop       anhalten"

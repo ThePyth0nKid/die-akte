@@ -37,7 +37,7 @@ jobs:
       - name: Sperrliste über Arbeitsbaum und Historie
         env:
           OSS_SCRUB_SPERRLISTE_INHALT: ${{ github.event_name != 'pull_request' && secrets.OSS_SCRUB_SPERRLISTE_INHALT || '' }}
-          IST_ORIGINAL: ${{ github.repository == 'ThePyth0nKid/die-akte' && github.event_name != 'pull_request' }}
+          IST_ORIGINAL: ${{ contains(fromJSON('["ThePyth0nKid/ultra-akte", "ThePyth0nKid/die-akte"]'), github.repository) && github.event_name != 'pull_request' }}
         run: |
           if [ -n "$OSS_SCRUB_SPERRLISTE_INHALT" ]; then
             python3 werkzeuge/scrub/pruefen.py --alle --privat-pflicht

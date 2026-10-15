@@ -4,7 +4,7 @@ from django.apps import AppConfig
 class AkteConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "akte"
-    verbose_name = "Die Akte — Ermittler-Wand"
+    verbose_name = "Ultra-Akte — Ermittler-Wand"
 
     def ready(self):
         from . import checks  # noqa: F401 — Systemprüfungen anmelden (Board-Kennung „einrichten“)

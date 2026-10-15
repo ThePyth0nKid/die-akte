@@ -12,7 +12,7 @@ import { gleicheHerkunft } from "@/lib/herkunft"
 export const dynamic = "force-dynamic"
 
 const NICHT_SPEICHERN = { "Cache-Control": "no-store" }
-const NICHT_ERREICHBAR = { fehler: "Die Akte ist gerade nicht erreichbar. Läuft sie noch? Sonst neu starten (START-AKTE)." }
+const NICHT_ERREICHBAR = { fehler: "Die Ultra-Akte ist gerade nicht erreichbar. Läuft sie noch? Sonst neu starten (START-AKTE)." }
 
 export async function GET(request: NextRequest) {
   // Die Besucher-IP weitergeben wie beim Anlegen und beim Login (Drossel je Absender im Backend).

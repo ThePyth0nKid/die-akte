@@ -33,7 +33,7 @@ export default function ErstesKontoHinweis() {
           Erstes Konto anlegen
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-[#C9CED6]">
-          Die Akte ist neu und hat noch kein Konto. Lege jetzt dein eigenes an. Du brauchst dafür den
+          Die Ultra-Akte ist neu und hat noch kein Konto. Lege jetzt dein eigenes an. Du brauchst dafür den
           Einrichtungscode: Der Starter trägt ihn ein, wenn er den Browser öffnet. Fehlt er, starte START-AKTE noch
           einmal (Doppelklick).
         </p>

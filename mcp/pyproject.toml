@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "akte-mcp"
-version = "0.2.0"
-description = "MCP-Server, Client und CLI für Die Akte – Ermittler-Wand mit Belegpflicht"
+version = "0.3.0"
+description = "MCP-Server, Client und CLI für die Ultra-Akte – Ermittler-Wand mit Belegpflicht"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Signaturen prüfen (akte pruefe-signaturen): das Paket akte-beweis aus demselben Repo, als Release-ZIP (ohne Git).
-beweis = ["akte-beweis @ https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v0.2.0.zip#subdirectory=beweis"]
+beweis = ["akte-beweis @ https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v0.3.0.zip#subdirectory=beweis"]
 test = ["pytest>=8", "responses>=0.25"]
 
 [project.scripts]

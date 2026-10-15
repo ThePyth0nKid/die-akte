@@ -283,7 +283,7 @@ setze_einrichtung '{"offen": false, "grund": "eingerichtet"}'
 UMGEBUNG=("${MIT_DATEN[@]}" PATH="$ATTRAPPEN:$PATH")
 code=0
 aus="$(lauf "$ordner" agent --still)" || code=$?
-quelle="https://github.com/ThePyth0nKid/die-akte/archive/refs/tags/v$VERSION.zip#subdirectory=mcp"
+quelle="https://github.com/ThePyth0nKid/ultra-akte/archive/refs/tags/v$VERSION.zip#subdirectory=mcp"
 pruefe "agent: Rückgabe 0 und Schlusssatz" \
   "$([ "$code" -eq 0 ] && enthaelt "$aus" "Fertig. Beende Claude (/exit) und starte es neu mit: claude --continue"; echo $?)" "$aus"
 pruefe "agent: Token erscheint nie in der Ausgabe" "$(! enthaelt "$aus" "ATTRAPPExTOKENxATTRAPPExTOKENxATTRAPPExx"; echo $?)" "$aus"
