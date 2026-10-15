@@ -25,9 +25,10 @@ fertiges „ü“). ZIP-Container (auch DOCX, XLSX, PPTX) werden Datei für Date
 und verweigert flache Klone, denn dort fehlt Historie.
 
 Einzige Ausnahme in der Historie: ``historie_ausnahmen.txt`` neben diesem Skript nennt schon veröffentlichte Commits,
-deren Autorenname nicht geprüft wird (etwa ein Merge-Commit, in den GitHub den Profilnamen geschrieben hat). Sie gilt
-nur für Commits, die schon auf ``origin/main`` liegen; ein Pull Request kann so keinen eigenen Commit freigeben. Mail,
-Committer, Nachricht und Inhalt dieser Commits prüft ``--historie`` weiter; jede Ausnahme steht im Log.
+deren Autoren- oder Committer-Name nicht geprüft wird (GitHub schreibt beim Zusammenführen den Profilnamen hinein:
+beim Merge-Commit als Autor, beim Rebase als Committer). Sie gilt
+nur für Commits, die schon auf ``origin/main`` liegen; ein Pull Request kann so keinen eigenen Commit freigeben. Beide
+Mail-Adressen, Nachricht und Inhalt dieser Commits prüft ``--historie`` weiter; jede Ausnahme steht im Log.
 
 Nicht geprüft werden komprimierte PDF-Inhalte, Base64 und Git-LFS-Objekte (nur deren Zeiger). Für solche Dateien
 gilt: vor dem Commit selbst ansehen.
@@ -55,8 +56,9 @@ from pathlib import Path
 HIER = Path(__file__).resolve().parent
 OEFFENTLICH = HIER / "regeln_oeffentlich.txt"
 AUSNAHMEN = HIER / "historie_ausnahmen.txt"
-#: Was eine Ausnahme abdecken darf: nur den Autorennamen im Commit-Kopf, nie Mail, Committer oder Nachricht.
-AUSNAHME_FELDER = {"autor-name"}
+#: Was eine Ausnahme abdecken darf, mit der Zeile im Commit-Kopf (%an, %ae, %cn, %ce, %B): nur Namen, nie Mail
+#: oder Nachricht.
+AUSNAHME_FELDER = {"autor-name": 0, "committer-name": 2}
 #: Eine Ausnahme gilt nur für Commits, die hier schon enthalten sind (fehlt der Verweis: keine Ausnahme).
 AUSNAHME_BASIS = "refs/remotes/origin/main"
 ERLAUBT_MARKE = "scrub:erlaubt"
@@ -306,7 +308,10 @@ def _blobs_lesen(objekte: list[str], wurzel: Path, max_mb: int):
 
 
 def _ausnahmen_lesen(pfad: Path) -> dict[str, set[str]]:
-    """``<voller Commit-Hash> autor-name`` je Zeile, ``#`` = Kommentar. Jede andere Zeile bricht ab (im Zweifel prüfen)."""
+    """``<voller Commit-Hash> <Feld>`` je Zeile (Feld aus ``AUSNAHME_FELDER``), ``#`` = Kommentar.
+
+    Jede andere Zeile bricht ab (im Zweifel prüfen).
+    """
     if not pfad.exists():
         return {}
     ausnahmen: dict[str, set[str]] = {}
@@ -315,7 +320,7 @@ def _ausnahmen_lesen(pfad: Path) -> dict[str, set[str]]:
         if not teile:
             continue
         if len(teile) != 2 or not re.fullmatch(r"[0-9a-f]{40}", teile[0]) or teile[1] not in AUSNAHME_FELDER:
-            raise SystemExit(f"{pfad.name}:{nr}: erwartet „<voller Commit-Hash> autor-name“.")
+            raise SystemExit(f"{pfad.name}:{nr}: erwartet „<voller Commit-Hash> autor-name|committer-name“.")
         ausnahmen.setdefault(teile[0], set()).add(teile[1])
     return ausnahmen
 
@@ -344,15 +349,19 @@ def historie_pruefen(regeln: list[Regel], max_mb: int = MAX_MB) -> list[Fund]:
     namen_gesehen: set[str] = set()
     for commit in _git("rev-list", "--all", cwd=wurzel).decode().split():
         kopf = _git("show", "-s", "--format=%an%n%ae%n%cn%n%ce%n%B", commit, cwd=wurzel)
-        if "autor-name" in ausnahmen.get(commit, ()):
+        felder = ausnahmen.get(commit)
+        if felder:
             genutzt.add(commit)
-            ende = kopf.find(b"\n")
-            if ende < 0:
+            zeilen = kopf.split(b"\n")
+            if len(zeilen) < 5:
                 raise SystemExit(f"Unerwartetes Kopfformat in {commit[:12]}.")
             if _liegt_auf_basis(commit, wurzel):
-                # Zeile 1 (%an) ersetzen, die Zeilennummern der übrigen Felder bleiben gleich.
-                kopf = b"(Autorenname ausgenommen)" + kopf[ende:]
-                print(f"Ausnahme: Autorenname von {commit[:12]} nicht geprüft ({AUSNAHMEN.name}).", file=sys.stderr)
+                # Nur die Zeile des Felds ersetzen; die Zeilennummern der übrigen bleiben gleich.
+                for feld in felder:
+                    zeilen[AUSNAHME_FELDER[feld]] = b"(ausgenommen)"
+                kopf = b"\n".join(zeilen)
+                print(f"Ausnahme: {', '.join(sorted(felder))} von {commit[:12]} nicht geprüft ({AUSNAHMEN.name}).",
+                      file=sys.stderr)
             else:
                 print(f"Ausnahme für {commit[:12]} gilt nicht: nicht in {AUSNAHME_BASIS}.", file=sys.stderr)
         funde += _pruefe_bytes(f"{commit[:12]}:kopf", kopf, regeln)

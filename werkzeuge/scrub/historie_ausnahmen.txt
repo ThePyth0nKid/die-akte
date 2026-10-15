@@ -1,8 +1,12 @@
 # SPDX-License-Identifier: MIT
-# Schon veröffentlichte Commits auf main, deren Autorenname `pruefen.py --historie` nicht prüft.
-# Mail, Committer, Nachricht und Inhalt dieser Commits prüft die Historie weiter. Eine Ausnahme gilt nur für Commits,
-# die schon auf origin/main liegen. Format: <voller Commit-Hash> autor-name
-# Neue Einträge nur mit Begründung im Pull Request. Pull Requests werden per Rebase zusammengeführt.
+# Schon veröffentlichte Commits auf main, deren Autoren- oder Committer-Name `pruefen.py --historie` nicht prüft.
+# Beide Mail-Adressen, Nachricht und Inhalt dieser Commits prüft die Historie weiter. Eine Ausnahme gilt nur für Commits,
+# die schon auf origin/main liegen. Format: <voller Commit-Hash> autor-name|committer-name
+# Neue Einträge nur mit Begründung im Pull Request. Pull Requests werden per Rebase zusammengeführt; der
+# Profilname des Kontos ist seit 15.10.2026 gleich dem Kontonamen.
 
 # Merge von #9 (Version 0.2.0, 15.10.2026), Entscheidung des Betreibers.
 eae8f076493a369d5dcba9d13ba28c889ed622ee autor-name
+
+# Rebase von #11 (Leckschutz-Ausnahme, 15.10.2026), Entscheidung des Betreibers.
+8c5bddf2bf9d45a329f8b28fa4cf97856efd140f committer-name
