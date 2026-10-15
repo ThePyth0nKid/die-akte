@@ -1253,9 +1253,10 @@ class ObsidianExportView(Redaktion, APIView):
 def _oeffentliche_karte(e: Entitaet, kennung: str) -> dict:
     if e.ist_privatperson:
         return {"id": kennung, "typ": e.typ, "name": e.initialen(), "kurzbeschreibung": "",
-                "bild_url": "", "verdeckt": True}
+                "bild_url": "", "bild_nachweis": "", "verdeckt": True}
+    # Der Nachweis gehört zum Bild: Urheber und Lizenz, bei KI-Bildern die Kennzeichnung.
     return {"id": kennung, "typ": e.typ, "name": e.name, "kurzbeschreibung": e.kurzbeschreibung,
-            "bild_url": e.bild_url, "verdeckt": False}
+            "bild_url": e.bild_url, "bild_nachweis": e.bild_nachweis if e.bild_url else "", "verdeckt": False}
 
 
 def _oeffentlicher_faden(v: Verbindung, kennung: dict[int, str], nr: int) -> dict:

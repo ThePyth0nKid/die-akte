@@ -23,3 +23,10 @@ path = ["backend/**", "web/**", "render/**", "compose*.yaml", "Caddyfile", "star
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 ThePyth0nKid und Mitwirkende"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Bilder der erfundenen Demo-Akte (KI-Fotos und gezeichnete Logos): frei für alles, auch ohne Namensnennung.
+[[annotations]]
+path = ["backend/akte/static/akte/demo/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 ThePyth0nKid und Mitwirkende"
+SPDX-License-Identifier = "CC0-1.0"

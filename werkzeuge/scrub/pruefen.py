@@ -30,8 +30,15 @@ beim Merge-Commit als Autor, beim Rebase als Committer). Sie gilt
 nur für Commits, die schon auf ``origin/main`` liegen; ein Pull Request kann so keinen eigenen Commit freigeben. Beide
 Mail-Adressen, Nachricht und Inhalt dieser Commits prüft ``--historie`` weiter; jede Ausnahme steht im Log.
 
-Nicht geprüft werden komprimierte PDF-Inhalte, Base64 und Git-LFS-Objekte (nur deren Zeiger). Für solche Dateien
-gilt: vor dem Commit selbst ansehen.
+Bilder (PNG, GIF, WebP) werden nach ihrem Aufbau gelesen: geprüft werden Metadaten (Text, auch gepackter, EXIF, XMP,
+ICC, Kommentare) und jeder unbekannte Teil, nicht aber die Pixeldaten. Darin träfe eine Regel nur zufällig etwas.
+Das schützt vor Versehen (Werkzeuge schreiben Pfade und Namen in Metadaten), nicht vor absichtlich in Pixel- oder
+Farbdaten verstecktem Text.
+Wirkt der Aufbau unsauber (falsche Prüfsumme oder Länge, Bytes hinter dem Ende), wird die ganze Datei geprüft.
+JPEG, MP4 und alles andere werden immer ganz geprüft.
+
+Nicht geprüft werden komprimierte PDF-Inhalte, Base64, Git-LFS-Objekte (nur deren Zeiger) und das, was ein Bild
+zeigt. Für solche Dateien gilt: vor dem Commit selbst ansehen.
 
 Aufrufe:
   pruefen.py --staged                 # vor dem Commit (Git-Hook)
@@ -50,6 +57,7 @@ import subprocess
 import sys
 import unicodedata
 import zipfile
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -169,6 +177,152 @@ def _fassungen(daten: bytes) -> list[str]:
     return [roh] if normal == roh else [roh, normal]
 
 
+# ─── Bilder: nur Metadaten und Unbekanntes, keine Pixeldaten ─────────────────────────────────────────────────
+
+class _Unpruefbar(Exception):
+    """Ein Teil des Bildes ließ sich nicht lesen (z. B. gepackter Text zu groß oder kaputt)."""
+
+
+#: Reine Bild- und Farbdaten. Alles andere (auch jeder unbekannte Teil) wird geprüft.
+_PNG_BILDDATEN = {b"IDAT", b"fdAT", b"PLTE", b"tRNS"}
+_PNG_GEPACKT = {b"zTXt", b"iCCP"}  # Schlüsselwort \0 Verfahren Daten; iTXt hat ein eigenes Format
+_WEBP_BILDDATEN = {b"VP8 ", b"VP8L", b"ALPH"}
+MAX_BILD_TEILE = 10_000  # mehr Teile: ganze Datei prüfen
+
+
+def _entpacken(gepackt: bytes, max_bytes: int) -> bytes:
+    if max_bytes <= 0:  # 0 hieße für zlib: unbegrenzt
+        raise _Unpruefbar("gepackter Bildtext zu groß")
+    zerleger = zlib.decompressobj()
+    try:
+        inhalt = zerleger.decompress(gepackt, max_bytes)
+    except zlib.error as fehler:
+        raise _Unpruefbar(f"gepackter Bildtext unlesbar ({fehler})") from None
+    if zerleger.unconsumed_tail:
+        raise _Unpruefbar("gepackter Bildtext zu groß")
+    if zerleger.unused_data:  # ein zweiter Strom dahinter bliebe sonst ungelesen
+        raise _Unpruefbar("gepackter Bildtext mit Resten")
+    return inhalt
+
+
+def _hinter_nullen(inhalt: bytes, n: int) -> bytes:
+    """Was nach dem n-ten Nullbyte steht (Schlüsselwort \\0 …)."""
+    stuecke = inhalt.split(b"\0", n)
+    if len(stuecke) <= n:
+        raise _Unpruefbar("Bildtext unvollständig")
+    return stuecke[n]
+
+
+def _png_teile(daten: bytes, max_bytes: int) -> list[bytes] | None:
+    pos, teile, rest = 8, [], max_bytes  # rest: was alle gepackten Texte zusammen entpackt groß sein dürfen
+    while pos + 12 <= len(daten):
+        laenge = int.from_bytes(daten[pos:pos + 4], "big")
+        art = daten[pos + 4:pos + 8]
+        ende = pos + 12 + laenge
+        if not art.isalpha() or ende > len(daten):
+            return None
+        inhalt = daten[pos + 8:ende - 4]
+        if zlib.crc32(art + inhalt) != int.from_bytes(daten[ende - 4:ende], "big"):
+            return None
+        pos = ende
+        if art == b"IEND":
+            return teile if pos == len(daten) else None  # Bytes hinter dem Ende: ganz prüfen
+        if art in _PNG_BILDDATEN:
+            continue
+        teile.append(inhalt)
+        gepackt = None
+        if art in _PNG_GEPACKT:  # Schlüsselwort \0 Verfahren Daten
+            gepackt = _hinter_nullen(inhalt, 1)[1:]
+        elif art == b"iTXt":  # Schlüsselwort \0 Flag Verfahren Sprache \0 Übersetzung \0 Text
+            hinten = _hinter_nullen(inhalt, 1)
+            if hinten[:1] == b"\x01":
+                gepackt = _hinter_nullen(hinten[2:], 2)
+        if gepackt is not None:
+            teile.append(_entpacken(gepackt, rest))
+            rest -= len(teile[-1])
+    return None  # kein IEND
+
+
+def _gif_bloecke(daten: bytes, pos: int) -> tuple[bytes, int] | None:
+    """Unterblöcke ab ``pos`` bis zum leeren Block: (Inhalt ohne Längenbytes, Position danach)."""
+    inhalt = bytearray()
+    while pos < len(daten):
+        n = daten[pos]
+        if n == 0:
+            return bytes(inhalt), pos + 1
+        if pos + 1 + n > len(daten):
+            return None
+        inhalt += daten[pos + 1:pos + 1 + n]
+        pos += 1 + n
+    return None
+
+
+def _gif_teile(daten: bytes) -> list[bytes] | None:
+    if len(daten) < 13:
+        return None
+    pos, teile = 13, []
+    if daten[10] & 0x80:  # globale Farbtabelle
+        pos += 3 * 2 ** ((daten[10] & 7) + 1)
+    while pos < len(daten):
+        marke = daten[pos]
+        if marke == 0x3B:  # Ende
+            return teile if pos + 1 == len(daten) else None
+        if marke == 0x21 and pos + 2 <= len(daten):  # Erweiterung: Kommentar, Anwendung (XMP), Text …
+            bloecke = _gif_bloecke(daten, pos + 2)
+            if bloecke is None:
+                return None
+            inhalt, weiter = bloecke
+            # Beides: XMP steht roh in den Blöcken (die Längenbytes sind Teil des Textes), Kommentare zerteilt.
+            teile += [daten[pos:weiter], inhalt]
+            pos = weiter
+        elif marke == 0x2C and pos + 10 <= len(daten):  # Einzelbild: Farbtabelle und Pixel überspringen
+            gepackt = daten[pos + 9]
+            pos += 10 + (3 * 2 ** ((gepackt & 7) + 1) if gepackt & 0x80 else 0) + 1
+            bloecke = _gif_bloecke(daten, pos)
+            if bloecke is None:
+                return None
+            pos = bloecke[1]
+        else:
+            return None
+    return None  # kein Ende
+
+
+def _riff_teile(daten: bytes, pos: int, ende: int, tiefe: int) -> list[bytes] | None:
+    teile: list[bytes] = []
+    while pos < ende:
+        if pos + 8 > ende:
+            return None
+        art, laenge = daten[pos:pos + 4], int.from_bytes(daten[pos + 4:pos + 8], "little")
+        weiter = pos + 8 + laenge + (laenge & 1)
+        if weiter > ende or (laenge & 1 and daten[weiter - 1] != 0):
+            return None
+        inhalt = daten[pos + 8:pos + 8 + laenge]
+        if art == b"ANMF" and tiefe == 0:  # Animationsbild: 16 Bytes Lage und Dauer, dann eigene Teile
+            innen = _riff_teile(daten, pos + 24, pos + 8 + laenge, 1) if laenge >= 16 else None
+            if innen is None:
+                return None
+            teile += innen
+        elif art not in _WEBP_BILDDATEN:
+            teile.append(art + inhalt)
+        pos = weiter
+    return teile
+
+
+def _bild_teile(daten: bytes, max_bytes: int) -> list[bytes] | None:
+    """Die Teile eines PNG, GIF oder WebP, die geprüft werden; None heißt: kein solches Bild oder unsauber, also
+    die ganze Datei prüfen."""
+    teile = None
+    if daten.startswith(b"\x89PNG\r\n\x1a\n"):
+        teile = _png_teile(daten, max_bytes)
+    elif daten[:6] in (b"GIF87a", b"GIF89a"):
+        teile = _gif_teile(daten)
+    elif daten[:4] == b"RIFF" and daten[8:12] == b"WEBP":
+        if int.from_bytes(daten[4:8], "little") + 8 == len(daten):
+            teile = _riff_teile(daten, 12, len(daten), 0)
+    # Kein echtes Bild hat so viele Metadaten-Teile; jeder einzeln durch alle Regeln wäre nur langsam.
+    return None if teile is None or len(teile) > MAX_BILD_TEILE else teile
+
+
 def _pruefe_zip(ort: str, daten: bytes, regeln: list[Regel], max_bytes: int) -> list[Fund] | None:
     """ZIP-Container (auch DOCX, XLSX, PPTX) Datei für Datei; None, wenn es kein lesbares ZIP ist."""
     try:
@@ -196,17 +350,29 @@ def _pruefe_bytes(ort: str, daten: bytes, regeln: list[Regel], max_bytes: int = 
         innen = _pruefe_zip(ort, daten, regeln, max_bytes)
         if innen is not None:
             funde += innen
+    try:
+        teile = _bild_teile(daten, max_bytes)
+    except _Unpruefbar as grund:
+        funde.append(_ungeprueft(ort, str(grund)))
+        teile = None
+    # Bei Bildern zählen die Zeilen durch alle geprüften Teile, nicht durch die Datei.
     gesehen: set[tuple[int, str, int]] = set()
-    for fassung in _fassungen(daten):
-        for zeilen_nr, zeile in enumerate(fassung.splitlines(), start=1):
-            erlaubt = ERLAUBT_MARKE in zeile
-            for regel in regeln:
-                if erlaubt and not regel.privat and not regel.hart:
-                    continue
-                m = regel.muster.search(zeile)
-                if m and (zeilen_nr, regel.quelle, regel.nummer) not in gesehen:
-                    gesehen.add((zeilen_nr, regel.quelle, regel.nummer))
-                    funde.append(Fund(ort, zeilen_nr, regel, m.group(0)))
+    versatz = 0
+    for teil in [daten] if teile is None else teile:
+        laengste = 0
+        for fassung in _fassungen(teil):
+            zeilen = fassung.splitlines()
+            laengste = max(laengste, len(zeilen))
+            for zeilen_nr, zeile in enumerate(zeilen, start=versatz + 1):
+                erlaubt = ERLAUBT_MARKE in zeile
+                for regel in regeln:
+                    if erlaubt and not regel.privat and not regel.hart:
+                        continue
+                    m = regel.muster.search(zeile)
+                    if m and (zeilen_nr, regel.quelle, regel.nummer) not in gesehen:
+                        gesehen.add((zeilen_nr, regel.quelle, regel.nummer))
+                        funde.append(Fund(ort, zeilen_nr, regel, m.group(0)))
+        versatz += laengste
     return funde
 
 

@@ -282,6 +282,19 @@ class OeffentlichTest(TestCase):
         self.board.save()
         self.assertEqual(self.client.get("/api/v1/akte/oeffentlich/nordlicht/").status_code, 404)
 
+    @override_settings(AKTE_OEFFENTLICH_AKTIV=True)
+    def test_bild_kommt_mit_nachweis(self):
+        # Urheber, Lizenz oder KI-Kennzeichnung gehören zum Bild. Bei einer Privatperson bleibt beides leer.
+        for e in (self.mustermann, self.nordlicht, self.privat):
+            e.bild_url, e.bild_nachweis = "/static/akte/demo/max-mustermann.webp", "KI-Bild · erfundene Person"
+            e.save()
+        self.nordlicht.bild_url = ""
+        self.nordlicht.save()
+        karten = {k["name"]: k for k in self.client.get("/api/v1/akte/oeffentlich/nordlicht/").json()["karten"]}
+        self.assertEqual(karten["Max Mustermann"]["bild_nachweis"], "KI-Bild · erfundene Person")
+        self.assertEqual(karten["Nordlicht"]["bild_nachweis"], "")  # ohne Bild kein Nachweis
+        self.assertEqual((karten["T. K."]["bild_url"], karten["T. K."]["bild_nachweis"]), ("", ""))
+
 
 @override_settings(AKTE_MITGLIEDER_BOARDS="nordlicht")
 class MitgliederTest(TestCase):

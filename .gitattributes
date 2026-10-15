@@ -4,7 +4,11 @@
 *.ps1 text eol=crlf
 *.png binary
 *.jpg binary
+*.gif binary
 *.pdf binary
 *.webp binary
 *.mp4 binary
 *.sqlite3 binary
+*.svg text eol=lf
+# Bilder der README: auf GitHub sichtbar, aber nicht im ZIP eines Release (das bleibt klein).
+docs/bilder/readme/** export-ignore
